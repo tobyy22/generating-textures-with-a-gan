@@ -1,0 +1,11 @@
+- dopropagoval jsem gradient do textury, coz znamena ze umim vzit mesh (3D objekt) namapovany na mnou inicializovanou texturu a nasledne se tu texturu pomoci rgb loss 'ucit' 
+- chci optimalizovat to trenovani textury, abych byl schopen v rozumnem case najit dostatecne dobrou texturu
+- v ramci toho jsem si vytvoril ground truth pro kravu - v zasade vyrobeni nejlepsi mozne textury (loss cca dokonvergovala), mam data, jak se zlepsovala loss a jak vypadala
+po urcitych intervalech iteraci
+- nasledne zkusim najit takove parametry trenovani, abych se byl schopen priblizit teto ground truth co nejlepe a zaroven to trvalo podstatne kratsi dobu 
+
+
+-resim problem, ze predikovana textura obsahuje hodnoty cca mezi -1 az 3, pricemz spravna textura obsahuje hodnoty mezi 0 a 1 (RGB)
+- program normalne funguje, loss konverguje, ale je to zvlastni
+- mozne reseni je pridat loss pro penalizaci hodnot mimo uvedeny interval, funguje to jsem schopen se tomu intervalu
+pekne priblizit
