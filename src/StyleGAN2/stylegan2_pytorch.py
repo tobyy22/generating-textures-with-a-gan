@@ -748,6 +748,9 @@ class StyleGAN2(nn.Module):
         self.G = Generator(texture_size, latent_dim, network_capacity, transparent = transparent, attn_layers = attn_layers, no_const = no_const, fmap_max = fmap_max)
         self.D = Discriminator(image_size, network_capacity, fq_layers = fq_layers, fq_dict_size = fq_dict_size, attn_layers = attn_layers, transparent = transparent, fmap_max = fmap_max)
 
+        """
+        If conditional input, we will add Encoder to the architecture.
+        """
         self.E = None
         if conditional_input: 
             self.E = CustomEncoder(latent_dim, texture_size[0])
@@ -822,6 +825,10 @@ def get_config():
         except TypeError:
             continue
     return clean_data
+
+"""
+We did a lot of copying and we do not optimize all code. A lot of parameters are unnecessary in our implementation. 
+"""
 
 class StyleGan2Trainer(Trainer):
     def __init__(
@@ -911,21 +918,13 @@ class StyleGan2Trainer(Trainer):
 
         self.lr = lr
         self.lr_mlp = lr_mlp
-        # self.ttur_mult = ttur_mult
-        # self.rel_disc_loss = rel_disc_loss
+
         self.batch_size = batch_size
-        # self.num_workers = num_workers
         self.mixed_prob = mixed_prob
 
-        # self.num_image_tiles = num_image_tiles
-        # self.evaluate_every = evaluate_every
-        # self.save_every = save_every
+
         self.steps = 0
 
-        # self.av = None
-        # self.trunc_psi = trunc_psi
-
-        # self.no_pl_reg = no_pl_reg
         self.pl_mean = None
 
         self.gradient_accumulate_every = gradient_accumulate_every
@@ -943,18 +942,11 @@ class StyleGan2Trainer(Trainer):
         self.last_fid = None
 
         self.pl_length_ma = EMA(0.99)
-        # self.init_folders()
 
         self.loader = None
         self.dataset_aug_prob = dataset_aug_prob
 
-        # self.calculate_fid_every = calculate_fid_every
-        # self.calculate_fid_num_images = calculate_fid_num_images
-        # self.clear_fid_cache = clear_fid_cache
 
-        # self.top_k_training = top_k_training
-        # self.generator_top_k_gamma = generator_top_k_gamma
-        # self.generator_top_k_frac = generator_top_k_frac
 
         self.dual_contrast_loss = dual_contrast_loss
 
@@ -1030,24 +1022,18 @@ class StyleGan2Trainer(Trainer):
         return {**parent_config, **child_config}
 
 
-
+    """
+    We mainly made changes in this function. 
+    """
     def train_epoch(self):
 
         if not exists(self.GAN):
             self.init_GAN()
         
 
-        # self.save()
-
         self.GAN.train()
         total_disc_loss = torch.tensor(0.).cuda(self.rank)
         total_gen_loss = torch.tensor(0.).cuda(self.rank)
-
-        batch_size = math.ceil(self.batch_size / self.world_size)
-
-        image_size = self.GAN.G.image_size
-        latent_dim = self.GAN.G.latent_dim
-        num_layers = self.GAN.G.num_layers
 
         aug_prob   = self.aug_prob
         aug_types  = self.aug_types
@@ -1070,10 +1056,9 @@ class StyleGan2Trainer(Trainer):
 
         D_loss_fn = hinge_loss
         G_loss_fn = gen_hinge_loss
-        G_requires_reals = False
 
 
-        # train discriminator
+        
 
         avg_pl_length = self.pl_mean
 
@@ -1083,7 +1068,7 @@ class StyleGan2Trainer(Trainer):
                 image_batch = data.cuda(self.rank)
                 image_batch = image_batch.requires_grad_()
 
-                """Non random input (position textures encoded as noise)"""
+                """If conditional input, we load position textures"""
                 if self.conditional_input:
                     position_textures = self.dataset.load_current_batch_position_textures()
                 else:
@@ -1093,16 +1078,14 @@ class StyleGan2Trainer(Trainer):
                 fake_texture_batch = self.generate_fake_texture(position_textures=position_textures)
                 fake_renders = self.dataset.get_fake_data(fake_texture_batch)
 
+                """Training discriminator"""
+
                 fake_output, _ = D_aug(fake_renders.clone().detach(), detach = True, **aug_kwargs)
-
-
-                real_output, real_q_loss = D_aug(image_batch, **aug_kwargs)
+                real_output, _ = D_aug(image_batch, **aug_kwargs)
 
                 real_output_loss = real_output
                 fake_output_loss = fake_output
 
-
-                
                 divergence = D_loss_fn(real_output_loss, fake_output_loss)
                 disc_loss = divergence
 
@@ -1122,18 +1105,15 @@ class StyleGan2Trainer(Trainer):
 
                 self.GAN.D_opt.step()
 
-                # train generator
+                """Training generator"""
 
                 self.GAN.G_opt.zero_grad()
-
-                # style = get_latents_fn(batch_size, num_layers, latent_dim, device=self.rank)
 
 
                 fake_output, _ = D_aug(fake_renders, **aug_kwargs)
                 fake_output_loss = fake_output
 
                 real_output = None
-
 
                 loss = G_loss_fn(fake_output_loss, real_output)
                 gen_loss = loss
@@ -1175,9 +1155,7 @@ class StyleGan2Trainer(Trainer):
                                  }
 
                     visual_data = self.visualize_data()
-
                     all_logs = {**visual_data, **loss_logs}
-
                     wandb.log(all_logs)
 
 
@@ -1191,7 +1169,9 @@ class StyleGan2Trainer(Trainer):
 
 
     def generate_fake_texture(self, position_textures=None):
-            """ Generate fake textures from current batch"""
+            """ 
+            Generate fake textures from current batch
+            """
 
             S = self.GAN.S 
             G = self.GAN.G 
@@ -1200,16 +1180,18 @@ class StyleGan2Trainer(Trainer):
             latent_dim = self.GAN.G.latent_dim
             num_layers = self.GAN.G.num_layers
 
-
+            # if None, this is the original implementation
             if position_textures is None:
                 noise = image_noise(self.number_of_meshes_per_iteration, self.image_size, device=self.rank)
                 get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
                 style = get_latents_fn(self.number_of_meshes_per_iteration, num_layers, latent_dim, device=self.rank)
                 w_space = latent_to_w(S, style)
                 w_styles = styles_def_to_tensor(w_space)
+            # Otherwise we propagate UV textures through encoder
             else:
                 noise = image_noise(position_textures.size(0), self.image_size, device=self.rank)
                 encoded_uv_textures = E(position_textures)
+                # This creates style vector for each layer and for each data in batch
                 w_styles = replicate_tensor(encoded_uv_textures, num_layers) 
 
             fake_texture = G(w_styles, noise)
@@ -1229,86 +1211,12 @@ class StyleGan2Trainer(Trainer):
         return generated_texture, position_texture
 
 
-    
-    # @torch.no_grad()
-    # def visualize_data2(self, output_path, index=2):
-    #     with torch.no_grad():
-            
-    #         #number of textures corresponds to batch size
-    #         decoded_textures, pos = self.generate_texture_for_object(index)
-    #         pos = torch.permute(pos, (0, 3, 1, 2))
-            
-
-    #         # decoded_texture2 = decoded_textures[1:2, :, :, :]
-
-    #         rendered_views_using_texture1 = self.dataset.get_multiple_views(
-    #             index, decoded_textures
-    #         )
-
-    #         tensors_to_save = [decoded_textures, pos]
-
-            
-
-    #         save_tensors_to_png(tensors_to_save, output_path)
-
-    # @torch.no_grad()
-    # def compute_fid_score(self):
-    #     self.GAN.eval()
-    #     # random_data_index = self.dataset.get_random_data_index()
-    #     # random_data_index = 2
-    #     data_indices = [2, 1001, 4498, 2333]
-    #     all_real_data_tensors = []
-    #     all_fake_data_tensors = []
-
-    #     for index in data_indices:
-    #         real_data_tensors = self.dataset.render_specific_object(index)
-    #         real_data_tensors = torch.stack(real_data_tensors)
-    #         generated_texture = self.generate_texture_for_object(index)
-    #         fake_data_tensors = self.dataset.get_multiple_views(index, generated_texture)
-
-    #         # Append tensors to the lists
-    #         all_real_data_tensors.append(real_data_tensors)
-    #         all_fake_data_tensors.append(fake_data_tensors)
-
-    #     all_real_data_tensors = torch.cat(all_real_data_tensors, dim=0)
-    #     all_fake_data_tensors = torch.cat(all_fake_data_tensors, dim=0)
-        
-    #     real_images_path = 'fid_temp/real'
-    #     fake_images_path = 'fid_temp/fake'
-
-    #     ensure_empty_directory(real_images_path)
-    #     ensure_empty_directory(fake_images_path)
-
-    #     save_tensors_to_png(all_real_data_tensors, real_images_path)
-    #     save_tensors_to_png(all_fake_data_tensors, fake_images_path)
-
-    #     fid_value = fid_score.calculate_fid_given_paths([real_images_path, fake_images_path],
-    #                                             batch_size=50,
-    #                                             device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-    #                                             dims=2048)
-        
-        
-    #     return {'fid_score': fid_value.item()}
-        
-
-    # def model_name(self, epoch):
-    #     os.makedirs(str(self.models_dir / self.name), exist_ok=True)
-    #     return str(self.models_dir / self.name / f'model_{epoch}.pt')
-
-    # def init_folders(self):
-    #     # (self.results_dir / self.name).mkdir(parents=True, exist_ok=True)
-    #     (self.models_dir / self.name).mkdir(parents=True, exist_ok=True)
-
     def clear(self):
         rmtree(str(self.models_dir / self.name), True)
         # rmtree(str(self.results_dir / self.name), True)
         rmtree(str(self.fid_dir), True)
         rmtree(str(self.config_path), True)
         self.init_folders()
-
-
-
-
 
 
     @torch.no_grad()
