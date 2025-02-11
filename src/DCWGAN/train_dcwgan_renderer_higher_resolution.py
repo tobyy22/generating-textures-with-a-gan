@@ -59,7 +59,7 @@ class DCWGANRendererTrainer(DCWGANTrainerParent):
             self.GAN.generator.zero_grad()
             output = self.GAN.discriminator(rendered_fake_views).view(-1)
             errG = self.loss_function(output, real_flag=True)
-            errG.backward()
+            errG.backward() 
             self.GAN.generator_optimizer.step()
 
             # Log generator and discriminator losses
@@ -70,7 +70,6 @@ class DCWGANRendererTrainer(DCWGANTrainerParent):
             
             # Periodically log visual data, and other metrics
             if i % self.evaluate_every == 0:
-                # fid_score = self.compute_fid_score()
                 visual_data = self.visualize_data()
                 all_logs = {**visual_data, **log_dict}
                 wandb.log(all_logs)

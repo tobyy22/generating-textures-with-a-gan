@@ -599,6 +599,18 @@ class Dataset3D:
         return position_textures
 
     def load_specific_position_textures(self, index=1290):
+        """
+        Loads and processes position-based textures for a specific 3D object.
+
+        This function retrieves the UV texture of a 3D object at a given index, 
+        processes it into a suitable format, and returns it as a batch tensor.
+
+        Args:
+            index (int, optional): The index of the object in the dataloader (default: 1290).
+
+        Returns:
+            torch.Tensor: A tensor containing the processed position textures with shape (num_textures, C, H, W).
+        """
         position_textures = []
         texture = self.load_uv_texture(self.dataloader[index])
         position_textures.extend(texture)
@@ -612,6 +624,19 @@ class Dataset3D:
         return position_textures
 
     def get_multiple_views(self, index, texture=None):
+        """
+        Generates multiple rendered views of a 3D object with specified id with an optional texture. 
+        If texture is None, default (original) texture is used. Used for evaluation and visualization.
+
+        Args:
+            index (int): The index of the object in the dataloader.
+            texture (torch.Tensor, optional): A texture tensor of shape (B, C, H, W),
+                which will be permuted for rendering (default: None).
+
+        Returns:
+            torch.Tensor: A tensor containing multiple rendered views of the object
+            with shape (len(self.all_cameras), C, H, W).
+        """
         obj_filename = self.dataloader[index]
         if texture is not None:
             texture = torch.permute(texture, (0, 2, 3, 1))
@@ -626,68 +651,3 @@ class Dataset3D:
         views = torch.permute(views, (0, 3, 1, 2))
         return views
 
-    def texture_random_mesh_with_different_textures(self, textures, i=None):
-        """
-        Loads one mesh at index i. If i is not specified then random mesh is chosen. Function will render this mesh with fake textu
-        Args:
-            textures:
-            i:
-
-        Returns:
-
-        """
-        mesh_name = None
-        if i is not None:
-            mesh_name = self.dataloader[i]
-        else:
-            mesh_name = random.choice(self.dataloader.get_current_data_batch())
-
-        permutated_textures = torch.permute(textures, (0, 2, 3, 1))
-        number_of_textures = textures.size(0)
-
-        fake_data = []
-        for i in range(number_of_textures):
-            fake_rgb = self.render_wrapper.load_mesh_render_with_texture(
-                mesh_name,
-                camera_indices=[0],
-                texture=torch.unsqueeze(permutated_textures[i], 0),
-            )
-            fake_rgb = fake_rgb[0]
-            fake_rgb = (fake_rgb - torch.min(fake_rgb)) / (
-                torch.max(fake_rgb) - torch.min(fake_rgb)
-            )
-            fake_data.append(fake_rgb)
-
-        for k in range(len(fake_data)):
-            fake_data[k] = torch.unsqueeze(fake_data[k], 0)
-
-        fake_data = torch.cat(fake_data, 0)
-
-        fake_data = torch.permute(fake_data, (0, 3, 1, 2))
-
-        return fake_data
-
-
-def render_object_with_texture(object_path, texture, cameras=list(range(20))):
-    """
-    This function will render objects in current batch with provided textures. Intended use is to provide fake textures from the generator to generate fake views. 
-    
-    Args:
-        textures (torch.Tensor): Fake textures to render the objects in current batch with. Textures.size(0) should not be less than self.number_of_examples as
-                                    there would not be enough textures. 
-
-    Returns: 
-        torch.Tensor: Fake views. 
-
-    """
-
-
-    permutated_textures = torch.permute(texture, (0, 2, 3, 1))
-    fake_rgb = self.render_wrapper.load_mesh_render_with_texture(
-        object_path,
-        camera_indices=cameras,
-        texture=torch.unsqueeze(permutated_textures[0], 0),
-    )
-
-
-    return fake_rgb

@@ -1,37 +1,31 @@
 #!/usr/bin/env python
 
 
+import json
+import numpy as np
+from pathlib import Path
 
 import torch
 import torch.nn.parallel
 import torch.utils.data
-from pytorch_fid import fid_score
-
-from pathlib import Path
-
 
 import torchvision.utils as vutils
+from tqdm import tqdm
 import wandb
 
-from tqdm import tqdm
+# FID computation
+from pytorch_fid import fid_score
 
-
-
-
-import json
-import numpy as np
-
-
-from src.dataset3d.Dataset3D import Dataset3D, render_object_with_texture
-
+# Custom modules
+from src.dataset3d.Dataset3D import Dataset3D
 from src.utils.helper_functions import save_tensors_to_png, ensure_empty_directory
-from src.dataset3d.uv_texture_generator import get_uv_texture
 
 
 
 
 class Trainer:
-    def __init__(self, name, 
+    def __init__(self, 
+                 name, 
                  models_dir, 
                  dataset_path='./3DDataset', 
                  pre_generated_uv_textures_dir=None,
@@ -43,10 +37,32 @@ class Trainer:
                  number_of_mesh_views=4, 
                  num_epochs=20,
                  evaluate_every=50, 
-                 fid_score_data_indices=[2, 1001, 4498, 2333],
                  lr=1e-4,
                  ngpu=1,
-                 **args) -> None:
+                 **args):
+        
+        """
+        Initializes the Trainer class for running an experiment, setting up paths, model parameters, 
+        and configuration for dataset, textures, and training.
+
+        Args:
+            name (str): The name of the model or experiment.
+            models_dir (str): Directory where all models for the experiment will be saved.
+            dataset_path (str, optional): Path to the dataset (default is './3DDataset').
+            pre_generated_uv_textures_dir (str, optional): Path to pre-generated UV textures (default is None).
+            pregenerate_uv_textures (bool, optional): Flag to indicate whether UV textures should be pregenerated (default is False).
+            uv_textures_pregenerated (bool, optional): Flag indicating if UV textures have already been pregenerated (default is False).
+            image_size (int, optional): Size of the rendered views to be used in the experiment (default is 256).
+            texture_size (int, optional): Size of the UV textures (default is 128).
+            number_of_meshes_per_iteration (int, optional): Number of meshes processed per iteration (default is 16).
+            number_of_mesh_views (int, optional): Number of views generated per mesh (default is 4).
+            num_epochs (int, optional): Number of epochs for training (default is 20).
+            evaluate_every (int, optional): Frequency (in terms of epochs) to perform evaluation in wandb (default is 50).
+            lr (float, optional): Learning rate for the optimizer (default is 1e-4).
+            ngpu (int, optional): Number of GPUs to use for training (default is 1).
+            **args: Additional arguments passed to the parent class or specific experiment configurations.
+
+        """
         
         self.name = name
         self.models_dir = Path(models_dir)
@@ -57,7 +73,6 @@ class Trainer:
         self.number_of_mesh_views = number_of_mesh_views
         self.num_epochs=num_epochs
         self.evaluate_every = evaluate_every
-        self.fid_score_data_indices = fid_score_data_indices
         self.lr = lr
         self.ngpu=ngpu
 
@@ -73,9 +88,6 @@ class Trainer:
         else:
             self.device = torch.device("cpu")
         
-        
-
-
         self.GAN = None
 
         wandb.init(project="generating-textures-with-a-gan", config={})
@@ -85,7 +97,7 @@ class Trainer:
         self.epoch=0
     
     """
-    The following three methods should be implemented in the class that inherits in order to everything work seamlessly.
+    The following three methods should be implemented for each experiment.
     """
     def train_epoch(self):
         raise NotImplementedError
@@ -95,17 +107,11 @@ class Trainer:
 
     def init_GAN(self):
          raise NotImplementedError
-    
-    @torch.no_grad()
-    def evaluate_custom_data(self, path_to_object):
-        self.GAN.eval()
-        uv_texture = get_uv_texture(path_to_object, device=self.device, image_size=self.image_size)
-        generated_texture = self.generate_fake_texture(uv_texture)
-        rendered_views = render_object_with_texture(path_to_object, generated_texture)
-        
 
 
-
+    """
+    Basic training loop.
+    """
     def train_model(self):
         start_epoch = self.epoch
         print(f"Starting Training Loop from epoch {start_epoch}.")
@@ -171,11 +177,27 @@ class Trainer:
 
     
     @torch.no_grad()
-    def visualize_data(self, index=888, normalize=False, postfix=''):
+    def visualize_data(self, index=888, normalize=False):
+        """
+        Visualizes real and fake data along with rendered views to Weights & Biases (wandb).
+
+        This method sets the model to evaluation mode, generates a texture for the given object index,
+        renders multiple views using both the generated and real textures, and logs the visualizations 
+        to Weights & Biases (wandb).
+
+        Args:
+            index (int, optional): The index of the object in the dataset to visualize (default: 888).
+            normalize (bool, optional): Whether to normalize the images when creating grids (default: False).
+
+        Returns:
+            dict: A dictionary containing images logged to wandb with the following keys:
+                - `"fake_grid/"`: Rendered views using the generated texture.
+                - `"fake_texture/"`: The generated texture itself.
+                - `"real_grid/"`: Rendered views using the real texture.
+                - `"position_texture/"` (if available): The positional texture visualization.
+        """
         self.GAN.eval()
         decoded_texture1, position_texture = self.generate_texture_for_object(index)
-        print(torch.min(decoded_texture1))
-        print(torch.max(decoded_texture1))
         rendered_views_using_texture1 = self.dataset.get_multiple_views(
             index, decoded_texture1
         )
@@ -192,27 +214,19 @@ class Trainer:
         real_views_grid = vutils.make_grid(real_views, normalize=normalize)
 
         result = {
-            f"fake_grid{postfix}/": wandb.Image(view_grid1),
-            f"fake_texture{postfix}/": wandb.Image(texture1),
-            f"real_grid{postfix}/": wandb.Image(real_views_grid),
+            f"fake_grid/": wandb.Image(view_grid1),
+            f"fake_texture/": wandb.Image(texture1),
+            f"real_grid/": wandb.Image(real_views_grid),
         }
 
         if position_texture is not None:
-            result[f"position_texture{postfix}/"] = wandb.Image(position_texture)
+            result[f"position_texture/"] = wandb.Image(position_texture)
 
         return result
     
-    @torch.no_grad()
-    def visualize_multiple_textures(self, generator_input):
-        self.GAN.eval()
-        fake = self.GAN.generator(generator_input).detach().cpu()
-        grid = vutils.make_grid(fake, normalize=True)
-        grid = np.transpose(grid.numpy(), (1,2,0))
-
-        return {"textures_grid": wandb.Image(grid)}
     
     @torch.no_grad()
-    def compute_fid_score(self, data_indices=None, generation_batch_size=10):
+    def compute_fid_score(self, generation_batch_size=10):
     
         """
         Computes the Fréchet Inception Distance (FID) score to evaluate the similarity between
@@ -221,10 +235,6 @@ class Trainer:
         is calculated on these saved images.
 
         Args:
-            data_indices : (list of int, optional): A list of integers specifying which data indices
-                                                    to use for FID score calculation. 
-                                                    If None, defaults to `self.fid_score_data_indices`.
-            
             generation_batch_size : (int, default=10): The batch size for generating and saving images, 
                                                     used to manage memory consumption.
 
