@@ -1,3 +1,20 @@
+"""
+Refactoring and Optimization Summary
+
+During development, a significant amount of code was duplicated from the original. Not all parts were optimized or cleaned up
+
+Main Changes:
+
+- Added an Encoder to the StyleGAN2 directory.
+- Introduced the `conditional_input` option** to `StyleGAN2` and `StyleGAN2Trainer`, allowing the use of an encoder.
+- Updated train_epoch in StyleGAN2Trainer to support training with textures and optionally incorporate the encoder.
+- Implemented generate_fake_texture, enabling the generation of fake textures using StyleGAN2 and optionally utilizing the encoder for UV textures.
+
+"""
+
+
+
+
 import os
 import sys
 import math
@@ -826,9 +843,7 @@ def get_config():
             continue
     return clean_data
 
-"""
-We did a lot of copying and we do not optimize all code. A lot of parameters are unnecessary in our implementation. 
-"""
+
 
 class StyleGan2Trainer(Trainer):
     def __init__(
@@ -1040,23 +1055,13 @@ class StyleGan2Trainer(Trainer):
         aug_kwargs = {'prob': aug_prob, 'types': aug_types}
 
         apply_gradient_penalty = self.steps % 4 == 0
-        # apply_path_penalty = not self.no_pl_reg and self.steps > 5000 and self.steps % 32 == 0
         apply_path_penalty=False
-        apply_cl_reg_to_generated = self.steps > 20000
 
-        S = self.GAN.S 
-        G = self.GAN.G 
-        D = self.GAN.D 
+
         D_aug = self.GAN.D_aug 
-        E = self.GAN.E
-
         backwards = partial(loss_backwards, self.fp16)
-
-
-
         D_loss_fn = hinge_loss
         G_loss_fn = gen_hinge_loss
-
 
         
 
@@ -1170,7 +1175,7 @@ class StyleGan2Trainer(Trainer):
 
     def generate_fake_texture(self, position_textures=None):
             """ 
-            Generate fake textures from current batch
+            Generate fake textures for data. If position_textures is not None, it used that them as input to the model. 
             """
 
             S = self.GAN.S 
@@ -1200,7 +1205,6 @@ class StyleGan2Trainer(Trainer):
     def generate_texture_for_object(self, index):
         """
         Generates texture for specific object
-        output shape: (1,3,self.image_size, self.image_size)
         """
         if self.conditional_input:
             position_texture = self.dataset.load_specific_position_textures(index=index)
