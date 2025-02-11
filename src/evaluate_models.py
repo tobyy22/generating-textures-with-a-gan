@@ -9,11 +9,14 @@ from src.PytorchMRIUnet.train_with_similarity_loss import PytorchUnetSimilarityL
 
 def main():
     parser = argparse.ArgumentParser(description="Train and evaluate models.")
-    parser.add_argument("--trainer", type=str, required=True, choices=["DCWGANRenderer", "WGANUnet", "PytorchUnet", "PytorchUnetSimilarityLoss"], help="Specify the trainer to use.")
-    parser.add_argument("--inference_noise", action="store_true", help="Enable inference noise (for PytorchUnetTrainer only).")
+    parser.add_argument("--trainer", type=str, required=True, choices=[
+        "DCWGANRenderer", "WGANUnet", "PytorchUnet", "PytorchUnetSimilarityLoss"
+    ], help="Specify the trainer to use.")
     parser.add_argument("--evaluate_fid_score", action="store_true", help="Evaluate FID score.")
     parser.add_argument("--visualize_results", action="store_true", help="Visualize results.")
     parser.add_argument("--visualized_object_id", type=int, default=1433, help="ID of the object to visualize.")
+    parser.add_argument("--dataset_path", type=str, default="./3Dataset", help="Path to the dataset.")
+
     args = parser.parse_args()
 
     # Select the trainer based on the command-line argument
@@ -24,6 +27,7 @@ def main():
             image_size=64,
             texture_size=64,
             wgan=True,
+            dataset_path=args.dataset_path,
         )
     elif args.trainer == "WGANUnet":
         agent = WGANUnetTrainer(
@@ -33,6 +37,7 @@ def main():
             image_size=64,
             texture_size=64,
             uv_textures_pregenerated=True,
+            dataset_path=args.dataset_path,
         )
     elif args.trainer == "PytorchUnet":
         agent = PytorchUnetTrainer(
@@ -42,7 +47,7 @@ def main():
             texture_size=128,
             pre_generated_uv_textures_dir="my_data/uv_textures_128",
             uv_textures_pregenerated=True,
-            inference_noise=args.inference_noise,
+            dataset_path=args.dataset_path,
         )
     elif args.trainer == "PytorchUnetSimilarityLoss":
         agent = PytorchUnetSimilarityLossTrainer(
@@ -52,6 +57,7 @@ def main():
             texture_size=128,
             pre_generated_uv_textures_dir="my_data/uv_textures_128",
             uv_textures_pregenerated=True,
+            dataset_path=args.dataset_path,
         )
 
     # Load and initialize the dataset

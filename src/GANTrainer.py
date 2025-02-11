@@ -27,7 +27,7 @@ class Trainer:
     def __init__(self, 
                  name, 
                  models_dir, 
-                 dataset_path='./3DDataset', 
+                 dataset_path='./3Dataset', 
                  pre_generated_uv_textures_dir=None,
                  pregenerate_uv_textures=False,
                  uv_textures_pregenerated=False,

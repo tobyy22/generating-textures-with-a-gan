@@ -11,11 +11,12 @@ def parse_args():
     # Add arguments
     parser.add_argument("--obj_path", type=str, required=True, help="Path to the OBJ file")
     parser.add_argument("--export_dir", type=str, required=True, help="Directory where output should be saved")
-    parser.add_argument("--texture_path", type=str, required=False, help="Path to the texture file")
 
     # Extract Blender's arguments (everything after --)
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
     return args
+
+
 
 
 if __name__ == "__main__":
@@ -49,29 +50,27 @@ if __name__ == "__main__":
         bpy.ops.mesh.uv_texture_add()
 
     # Apply a new material if a texture is provided
-    if args.texture_path:
-        # Copy the texture to the export folder with a fixed name (texture.png)
-        shutil.copy(args.texture_path, texture_dest)
-        print(f"Copied texture to: {texture_dest}")
+    shutil.copy('my_data/texture_placeholder/texture.png', texture_dest)
+    print(f"Copied texture to: {texture_dest}")
 
-        # Create a new material and assign it
-        mat = bpy.data.materials.new(name="Material")
-        mat.use_nodes = True
-        bsdf = mat.node_tree.nodes.get("Principled BSDF")
+    # Create a new material and assign it
+    mat = bpy.data.materials.new(name="Material")
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes.get("Principled BSDF")
 
-        # Load the copied texture
-        tex_image = bpy.data.images.load(texture_dest)
-        tex_node = mat.node_tree.nodes.new("ShaderNodeTexImage")
-        tex_node.image = tex_image
+    # Load the copied texture
+    tex_image = bpy.data.images.load(texture_dest)
+    tex_node = mat.node_tree.nodes.new("ShaderNodeTexImage")
+    tex_node.image = tex_image
 
-        # Connect the texture node to the BSDF
-        mat.node_tree.links.new(bsdf.inputs['Base Color'], tex_node.outputs['Color'])
+    # Connect the texture node to the BSDF
+    mat.node_tree.links.new(bsdf.inputs['Base Color'], tex_node.outputs['Color'])
 
-        # Assign the material to the object
-        if len(obj.data.materials) == 0:
-            obj.data.materials.append(mat)
-        else:
-            obj.data.materials[0] = mat
+    # Assign the material to the object
+    if len(obj.data.materials) == 0:
+        obj.data.materials.append(mat)
+    else:
+        obj.data.materials[0] = mat
 
     # Switch to Edit mode to apply UV unwrapping
     bpy.ops.object.mode_set(mode='EDIT')
@@ -97,7 +96,7 @@ if __name__ == "__main__":
     with open(mtl_path, "r") as f:
         mtl_content = f.read()
 
-    mtl_content = mtl_content.replace(args.texture_path, "texture.png")  # Force relative reference
+    mtl_content = mtl_content.replace('my_data/texture_placeholder/texture.png', "texture.png")  # Force relative reference
 
     with open(mtl_path, "w") as f:
         f.write(mtl_content)
