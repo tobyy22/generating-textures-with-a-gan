@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 
 def wasserstein_loss(y_pred, real_flag, device=None):
   if real_flag:
@@ -7,43 +8,23 @@ def wasserstein_loss(y_pred, real_flag, device=None):
     return torch.mean(y_pred)
 
 
-def similarity_loss_old(tensors):
-    # Initialize a list to store the distances
-    distances = []
+def similarity_loss_mse(output_original, output_perturbed):
+    """
+    Computes the similarity loss to penalize identical outputs and encourage diversity.
 
-    # Iterate over the tensors
-    for i in range(len(tensors)):
-        for j in range(i + 1, len(tensors)):
-            # Compute the distance between the tensors
-            distance = torch.sqrt(torch.sum((tensors[i] - tensors[j]) ** 2))
+    The loss is calculated as the inverse of the Mean Squared Error (MSE) between the original
+    and perturbed outputs, ensuring that identical outputs are discouraged.
 
-            # Add the distance to the list
-            distances.append(distance)
+    Args:
+        output_original (Tensor): The original output from the U-Net generator.
+        output_perturbed (Tensor): The perturbed output from the U-Net generator.
 
-    mean_distance = torch.mean(torch.tensor(distances))
-
-    # Return the list of distances
-    return mean_distance.requires_grad_()
-
-def similarity_loss(tensors, koef=1.):
-    # Initialize a list to store the distances
-    distances = []
-
-    # Iterate over the tensors
-    for i in range(len(tensors)):
-        for j in range(i + 1, len(tensors)):
-            # Compute the distance between the tensors
-            distance = torch.sum((tensors[i] - tensors[j]) ** 2)
-
-            # Add the distance to the list
-            distances.append(distance)
-
-    mean_distance = torch.mean(torch.tensor(distances))
-
-    # similary
-
-    # Return the list of distances
-    return (koef*(1 / (mean_distance + 1e-8))).requires_grad_()
+    Returns:
+        Tensor: The computed similarity loss value.
+    """
+    mse_loss = nn.MSELoss()(output_original, output_perturbed)
+    inverse_mse_loss = 1.0 / (mse_loss + 1e-6)
+    return inverse_mse_loss
 
 
 

@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 import wandb
 
-from src.PytorchMRIUnet_plg.PytorchUnet import PytorchUnet
+from src.PytorchMRIUnet.PytorchUnet import PytorchUnet
 from src.losses import wasserstein_loss
 from src.GANTrainer import Trainer
 from src.set_seed import set_seed

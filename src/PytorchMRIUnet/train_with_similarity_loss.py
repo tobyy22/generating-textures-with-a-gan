@@ -4,31 +4,14 @@ import torch.nn as nn
 from tqdm import tqdm
 import wandb
 
-from src.PytorchMRIUnet_plg.PytorchUnet import PytorchUnetRandomPart
-from src.losses import wasserstein_loss
+from src.PytorchMRIUnet.PytorchUnet import PytorchUnetRandomPart
+from src.losses import wasserstein_loss, similarity_loss_mse
 from src.GANTrainer import Trainer
 from src.set_seed import set_seed
 
 # Set seed for reproducibility
 set_seed()
 
-def similarity_loss_mse(output_original, output_perturbed):
-    """
-    Computes the similarity loss to penalize identical outputs and encourage diversity.
-
-    The loss is calculated as the inverse of the Mean Squared Error (MSE) between the original
-    and perturbed outputs, ensuring that identical outputs are discouraged.
-
-    Args:
-        output_original (Tensor): The original output from the U-Net generator.
-        output_perturbed (Tensor): The perturbed output from the U-Net generator.
-
-    Returns:
-        Tensor: The computed similarity loss value.
-    """
-    mse_loss = nn.MSELoss()(output_original, output_perturbed)
-    inverse_mse_loss = 1.0 / (mse_loss + 1e-6)
-    return inverse_mse_loss
 
 class PytorchUnetSimilarityLossTrainer(Trainer):
     """

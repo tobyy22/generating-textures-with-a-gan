@@ -1138,15 +1138,6 @@ class StyleGan2Trainer(Trainer):
                 loss = G_loss_fn(fake_output_loss, real_output)
                 gen_loss = loss
 
-                # if apply_path_penalty:
-                #     pl_lengths = calc_pl_lengths(w_styles, generated_images)
-                #     avg_pl_length = np.mean(pl_lengths.detach().cpu().numpy())
-
-                #     if not is_empty(self.pl_mean):
-                #         pl_loss = ((pl_lengths - self.pl_mean) ** 2).mean()
-                #         if not torch.isnan(pl_loss):
-                #             gen_loss = gen_loss + pl_loss
-
                 gen_loss = gen_loss / self.gradient_accumulate_every
                 gen_loss.register_hook(raise_if_nan)
                 backwards(gen_loss, self.GAN.G_opt, loss_id = 2)

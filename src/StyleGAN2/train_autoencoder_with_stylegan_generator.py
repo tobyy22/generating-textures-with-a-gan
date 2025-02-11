@@ -101,7 +101,6 @@ class AutoEncoderTrainer(Trainer):
             self.optimizer.step()
 
             decoded_textures_grid1 = vutils.make_grid(decoded_textures1, normalize=True)
-            uv_textures_grid = vutils.make_grid(uv_textures, normalize=True)
 
             if i % self.evaluate_every == 0:
                 wandb.log({"decoded_textures_grid1": wandb.Image(decoded_textures_grid1),
@@ -109,10 +108,6 @@ class AutoEncoderTrainer(Trainer):
                             "MSE loss": loss.item(),
                           }
                          )
-
-
-
-
 
 if __name__ == "__main__":
     trainer = AutoEncoderTrainer(num_epochs=10,latent_vector_size=512,batch_size=8, uv_textures_directory='my_data/uv_textures_64', name='model_2', models_dir='my_data/stylegan2_autoencoder')
