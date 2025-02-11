@@ -33,7 +33,7 @@ from src.dataset3d.uv_texture_generator import get_uv_texture
 class Trainer:
     def __init__(self, name, 
                  models_dir, 
-                 dataset_path='/projects/3DDatasets/3D-FUTURE/3D-FUTURE-model', 
+                 dataset_path='./3DDataset', 
                  pre_generated_uv_textures_dir=None,
                  pregenerate_uv_textures=False,
                  uv_textures_pregenerated=False,
