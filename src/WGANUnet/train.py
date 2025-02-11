@@ -4,14 +4,6 @@
 
 
 
-
-
-import sys
-import pathlib
-
-p = pathlib.Path(__file__).parents[1]
-sys.path.append(str(p))
-
 import wandb
 from tqdm import tqdm
 
@@ -22,24 +14,29 @@ import torch.utils.data
 
 
 
-from src_c.WGANUnet.WGANUnet import WGANUnet
-from src_c.WGANUnet.losses import wasserstein_loss, similarity_loss
-from src_c.GANTrainer import Trainer
-from src_c.utils import save_tensors_to_png
+from src.WGANUnet.WGANUnet import WGANUnet
+from src.losses import wasserstein_loss, similarity_loss, similarity_loss_old
+from src.GANTrainer import Trainer
+from src.utils.helper_functions import save_tensors_to_png, add_dynamic_noise_to_tensors
+
+
+from src.set_seed import set_seed
+
+# Set seed for reproducibility
+set_seed()
 
 
 
 
 class WGANUnetTrainer(Trainer):
-    def __init__(self, random_size=50, lr=0.0002, similarity_loss=True, similarity_loss_alpha=3, weight_clipping=(-0.01, 0.01), **kwargs):
+    def __init__(self, latent_vector_size=100, random_size=50, lr=0.0002, weight_clipping=(-0.01, 0.01), **kwargs):
         super().__init__(lr=lr,**kwargs)
+        self.latent_vector_size = latent_vector_size
         self.random_size = random_size
-        self.similarity_loss = similarity_loss
-        self.similarity_loss_alpha = similarity_loss_alpha
+        self.non_random_size = latent_vector_size - random_size
         self.weight_clipping = weight_clipping
+
         
-
-
     def train_epoch(self):
         for i, data in enumerate(tqdm(self.dataset)):
 
@@ -50,6 +47,7 @@ class WGANUnetTrainer(Trainer):
                     self.weight_clipping[1],
                 )
 
+            self.GAN.train()
             # Training the discriminator on real examples
             real_examples = data  # shape [64, 3, 6]
             batch_size = real_examples.size(0)
@@ -94,47 +92,17 @@ class WGANUnetTrainer(Trainer):
                 "discriminator_loss": errD.item(),
             }
 
-            if self.similarity_loss:
-                other_noises = [
-                    torch.randn(
-                        batch_size // self.number_of_mesh_views,
-                        self.random_size,
-                        1,
-                        1,
-                        device=self.device,
-                    )
-                    for _ in range(self.similarity_loss_alpha)
-                ]
-                partly_random_other_noises = [
-                    torch.cat((other_noise, uv_textures_encoded), dim=1)
-                    for other_noise in other_noises
-                ]
-
-                other_fakes = []
-                for other_noise in partly_random_other_noises:
-                    other_fake = self.GAN.decoder(other_noise, middle_layers)
-                    other_fakes.append(other_fake)
-
-                errG_similar_outputs = similarity_loss(other_fakes)
-                errG_similar_outputs.backward()
-                log_dict["generator_similarity_loss"] = errG_similar_outputs.item()
 
             self.GAN.generator_optimizer.step()
 
-            # wandb.log(log_dict)
-
-            if i % 50 == 0:
-                fid_score = self.compute_fid_score()
+            if i % self.evaluate_every == 0:
                 visual_data = self.visualize_data()
-
-                all_logs = {**fid_score, **visual_data, **log_dict}
-
+                all_logs = {**visual_data, **log_dict}
                 wandb.log(all_logs)
-
-        # self.epoch += 1
     
     def generate_fake_texture(self, position_textures):
         uv_textures_encoded, middle_layers = self.GAN.encoder(position_textures)
+
         noise = torch.randn(
             position_textures.size(0),
             self.random_size,
@@ -154,32 +122,30 @@ class WGANUnetTrainer(Trainer):
         position_texture = self.dataset.load_specific_position_textures(index=index)
         generated_texture, _, _ = self.generate_fake_texture(position_texture)
         generated_texture = generated_texture[:1, :, :, :]
-        return generated_texture
-
-
-
-    def visualize_data2(self, index=2):
-        with torch.no_grad():
-
-            decoded_texture1 = self.generate_texture_for_object(index)
-
-            rendered_views_using_texture1 = self.dataset.get_multiple_views(
-                index, decoded_texture1
-            )
-
-            save_tensors_to_png(rendered_views_using_texture1, 'pngs/fake2')
+        return generated_texture, position_texture
+    
 
     def init_GAN(self):
-        self.GAN = WGANUnet(lr=self.lr, ngpu=self.ngpu)
+        self.GAN = WGANUnet(lr=self.lr, ngpu=self.ngpu, device=self.device, latent_vector_size=self.latent_vector_size, non_random_part_size=self.non_random_size)
 
 
 
 if __name__ == "__main__":
     agent = WGANUnetTrainer(
+                 name='model',
+                 models_dir='my_data/WGANUnet',
                  pre_generated_uv_textures_dir='my_data/uv_textures_64',
-                 pregenerate_uv_textures=False,
-                 uv_textures_pregenerated=True)
-    # agent.load()
+                 uv_textures_pregenerated=True,
+                 image_size=64,
+                 texture_size=64,
+                 number_of_meshes_per_iteration=5, 
+                 number_of_mesh_views=20, 
+                 num_epochs=20,
+                 evaluate_every=50, 
+                 lr=0.0002,
+                 )    
+    
     agent.prepare_for_training()
     agent.train_model()
+
 

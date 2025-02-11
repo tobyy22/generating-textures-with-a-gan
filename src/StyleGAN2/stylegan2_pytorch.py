@@ -1,10 +1,8 @@
 import os
 import sys
 import math
-import fire
 import json
 import pathlib
-import shutil
 
 p = pathlib.Path(__file__).parents[1]
 sys.path.append(str(p))
@@ -25,9 +23,6 @@ from torch.utils import data
 from torch.optim import Adam
 import torch.nn.functional as F
 from torch.autograd import grad as torch_grad
-from torch.utils.data.distributed import DistributedSampler
-from torch.nn.parallel import DistributedDataParallel as DDP
-import torchvision.utils as vutils
 
 
 from einops import rearrange, repeat
@@ -35,8 +30,8 @@ from kornia.filters import filter2d
 
 import torchvision
 from torchvision import transforms
-from stylegan2_pytorch_pkg.stylegan2_pytorch.version import __version__
-from stylegan2_pytorch_pkg.stylegan2_pytorch.diff_augment import DiffAugment
+from src.StyleGAN2.custom_encoder import CustomEncoder
+from src.StyleGAN2.diff_augment import DiffAugment
 
 from pytorch_fid import fid_score
 
@@ -46,8 +41,8 @@ from vector_quantize_pytorch import VectorQuantize
 from PIL import Image
 from pathlib import Path
 
-from src_c.dataset3d.Dataset3D import Dataset3D
-from src_c.GANTrainer import Trainer
+from src.dataset3d.Dataset3D import Dataset3D
+from src.GANTrainer import Trainer
 
 try:
     from apex import amp
@@ -60,6 +55,8 @@ import aim
 assert torch.cuda.is_available(), 'You need to have an Nvidia GPU with CUDA installed.'
 
 import wandb
+
+
 
 
 # constants
@@ -308,6 +305,31 @@ def evaluate_in_chunks(max_batch_size, model, *args):
 def styles_def_to_tensor(styles_def):
     return torch.cat([t[:, None, :].expand(-1, n, -1) for t, n in styles_def], dim=1)
 
+def replicate_tensor(input_tensor, num_replications):
+    """
+    Replicates a 2D tensor (batch_size, feature_size) along a new dimension.
+
+    Args:
+        input_tensor (torch.Tensor): The input tensor of shape (B, F)
+        num_replications (int): The number of times to replicate the features.
+
+    Returns:
+        torch.Tensor: The replicated tensor of shape (B, num_replications, F).
+    """
+    # Ensure the input tensor is 2D
+    if input_tensor.dim() != 2:
+        raise ValueError("Input tensor must be 2D, with shape (B, F).")
+
+    # Unsqueeze to add the replication dimension
+    # (B, F) -> (B, 1, F)
+    expanded_tensor = input_tensor.unsqueeze(1)
+
+    # Replicate along the newly added dimension
+    # (B, 1, F) -> (B, num_replications, F)
+    replicated_tensor = expanded_tensor.repeat(1, num_replications, 1)
+
+    return replicated_tensor
+
 def set_requires_grad(model, bool):
     for p in model.parameters():
         p.requires_grad = bool
@@ -459,18 +481,7 @@ class StyleVectorizer(nn.Module):
     def forward(self, x):
         x = F.normalize(x, dim=1)
         return self.net(x)
-    
-    # def forward(self, x):
 
-    #     # x1 = F.normalize(x, dim=1)
-    #     # x1 =  self.net(x1)
-
-    #     x = F.normalize(x, dim=1)
-    #     intermediate_outputs = []
-    #     for layer in self.net:
-    #         x = layer(x)
-    #         intermediate_outputs.append(x)
-    #     return x, intermediate_outputs
 
 class RGBBlock(nn.Module):
     def __init__(self, latent_dim, input_channel, upsample, rgba = False):
@@ -542,11 +553,11 @@ class GeneratorBlock(nn.Module):
         self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False) if upsample else None
 
         self.to_style1 = nn.Linear(latent_dim, input_channels)
-        self.to_noise1 = nn.Linear(3, filters)
+        self.to_noise1 = nn.Linear(1, filters)
         self.conv1 = Conv2DMod(input_channels, filters, 3)
         
         self.to_style2 = nn.Linear(latent_dim, filters)
-        self.to_noise2 = nn.Linear(3, filters)
+        self.to_noise2 = nn.Linear(1, filters)
         self.conv2 = Conv2DMod(filters, filters, 3)
 
         self.activation = leaky_relu()
@@ -724,19 +735,25 @@ class Discriminator(nn.Module):
         x = self.to_logit(x)
         return x.squeeze(), quantize_loss
 
+
+
 class StyleGAN2(nn.Module):
-    def __init__(self, image_size, latent_dim = 512, fmap_max = 512, style_depth = 8, network_capacity = 16, transparent = False, fp16 = False, cl_reg = False, steps = 1, lr = 1e-4, ttur_mult = 1.5, fq_layers = [], fq_dict_size = 256, attn_layers = [], no_const = False, lr_mlp = 0.1, rank = 0):
+    def __init__(self, image_size, texture_size=128, latent_dim = 512, fmap_max = 512, style_depth = 8, network_capacity = 16, transparent = False, fp16 = False, cl_reg = False, steps = 1, lr = 1e-4, ttur_mult = 1.5, fq_layers = [], fq_dict_size = 256, attn_layers = [], no_const = False, lr_mlp = 0.1, rank = 0, conditional_input=False):
         super().__init__()
         self.lr = lr
         self.steps = steps
         self.ema_updater = EMA(0.995)
 
         self.S = StyleVectorizer(latent_dim, style_depth, lr_mul = lr_mlp)
-        self.G = Generator(image_size, latent_dim, network_capacity, transparent = transparent, attn_layers = attn_layers, no_const = no_const, fmap_max = fmap_max)
+        self.G = Generator(texture_size, latent_dim, network_capacity, transparent = transparent, attn_layers = attn_layers, no_const = no_const, fmap_max = fmap_max)
         self.D = Discriminator(image_size, network_capacity, fq_layers = fq_layers, fq_dict_size = fq_dict_size, attn_layers = attn_layers, transparent = transparent, fmap_max = fmap_max)
 
+        self.E = None
+        if conditional_input: 
+            self.E = CustomEncoder(latent_dim, texture_size[0])
+
         self.SE = StyleVectorizer(latent_dim, style_depth, lr_mul = lr_mlp)
-        self.GE = Generator(image_size, latent_dim, network_capacity, transparent = transparent, attn_layers = attn_layers, no_const = no_const)
+        self.GE = Generator(texture_size, latent_dim, network_capacity, transparent = transparent, attn_layers = attn_layers, no_const = no_const)
 
         self.D_cl = None
 
@@ -754,7 +771,7 @@ class StyleGAN2(nn.Module):
         set_requires_grad(self.GE, False)
 
         # init optimizers
-        generator_params = list(self.G.parameters()) + list(self.S.parameters())
+        generator_params = list(self.G.parameters()) + list(self.E.parameters()) if conditional_input else self.G.parameters()
         self.G_opt = Adam(generator_params, lr = self.lr, betas=(0.5, 0.9))
         self.D_opt = Adam(self.D.parameters(), lr = self.lr * ttur_mult, betas=(0.5, 0.9))
 
@@ -814,14 +831,15 @@ class StyleGan2Trainer(Trainer):
         models_dir = './my_data/Stylegan2_newstructure/',
         base_dir = './',
         dataset_path="/projects/3DDatasets/3D-FUTURE/3D-FUTURE-model",
-        image_size = 128,
+        image_size = 256,
+        texture_size = 128,
         network_capacity = 16,
         fmap_max = 512,
         transparent = False,
-        batch_size = 5,
+        batch_size = 8,
         mixed_prob = 0.9,
         gradient_accumulate_every=1,
-        lr = 2e-4,
+        lr = 1e-4,
         lr_mlp = 0.1,
         ttur_mult = 1.5,
         rel_disc_loss = False,
@@ -851,6 +869,7 @@ class StyleGan2Trainer(Trainer):
         rank = 0,
         world_size = 1,
         log = False,
+        conditional_input=True,
         *args,
         **kwargs
     ):
@@ -875,13 +894,14 @@ class StyleGan2Trainer(Trainer):
 
         assert log2(image_size).is_integer(), 'image size must be a power of 2 (64, 128, 256, 512, 1024)'
         self.image_size = image_size
+        self.texture_size = texture_size
         self.network_capacity = network_capacity
         self.fmap_max = fmap_max
         self.transparent = transparent
 
         self.fq_layers = cast_list(fq_layers)
         self.fq_dict_size = fq_dict_size
-        self.has_fq = len(self.fq_layers) > 0
+        # self.has_fq = len(self.fq_layers) > 0
 
         self.attn_layers = cast_list(attn_layers)
         self.no_const = no_const
@@ -947,6 +967,8 @@ class StyleGan2Trainer(Trainer):
         self.logger = aim.Session(experiment=name) if log else None
         self.dataset_path = dataset_path
 
+        self.conditional_input = conditional_input
+
 
 
 
@@ -964,7 +986,7 @@ class StyleGan2Trainer(Trainer):
         
     def init_GAN(self):
         args, kwargs = self.GAN_params
-        self.GAN = StyleGAN2(lr = self.lr, lr_mlp = self.lr_mlp, image_size = self.image_size, network_capacity = self.network_capacity, fmap_max = self.fmap_max, transparent = self.transparent, fq_layers = self.fq_layers, fq_dict_size = self.fq_dict_size, attn_layers = self.attn_layers, fp16 = self.fp16, cl_reg = self.cl_reg, no_const = self.no_const, rank = self.rank)
+        self.GAN = StyleGAN2(lr = self.lr, lr_mlp = self.lr_mlp, image_size = self.image_size, texture_size=self.texture_size, network_capacity = self.network_capacity, fmap_max = self.fmap_max, transparent = self.transparent, fq_layers = self.fq_layers, fq_dict_size = self.fq_dict_size, attn_layers = self.attn_layers, fp16 = self.fp16, cl_reg = self.cl_reg, no_const = self.no_const, rank = self.rank, conditional_input = self.conditional_input)
 
 
     def write_config(self):
@@ -1040,48 +1062,16 @@ class StyleGan2Trainer(Trainer):
         G = self.GAN.G 
         D = self.GAN.D 
         D_aug = self.GAN.D_aug 
+        E = self.GAN.E
 
         backwards = partial(loss_backwards, self.fp16)
 
-        # if exists(self.GAN.D_cl):
-        #     self.GAN.D_opt.zero_grad()
 
-        #     if apply_cl_reg_to_generated:
-        #         for i in range(self.gradient_accumulate_every):
-        #             get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
-        #             style = get_latents_fn(batch_size, num_layers, latent_dim, device=self.rank)
-        #             noise = image_noise(batch_size, image_size, device=self.rank)
-
-        #             w_space = latent_to_w(self.GAN.S, style)
-        #             w_styles = styles_def_to_tensor(w_space)
-
-        #             generated_images = self.GAN.G(w_styles, noise)
-        #             self.GAN.D_cl(generated_images.clone().detach(), accumulate=True)
-
-        #     for i in range(self.gradient_accumulate_every):
-        #         image_batch = next(self.loader).cuda(self.rank)
-        #         self.GAN.D_cl(image_batch, accumulate=True)
-
-        #     loss = self.GAN.D_cl.calculate_loss()
-        #     self.last_cr_loss = loss.clone().detach().item()
-        #     backwards(loss, self.GAN.D_opt, loss_id = 0)
-
-        #     self.GAN.D_opt.step()
-
-        # setup losses
 
         D_loss_fn = hinge_loss
         G_loss_fn = gen_hinge_loss
         G_requires_reals = False
 
-        # if not self.dual_contrast_loss:
-        #     D_loss_fn = hinge_loss
-        #     G_loss_fn = gen_hinge_loss
-        #     G_requires_reals = False
-        # else:
-        #     D_loss_fn = dual_contrastive_loss
-        #     G_loss_fn = dual_contrastive_loss
-        #     G_requires_reals = True
 
         # train discriminator
 
@@ -1090,22 +1080,17 @@ class StyleGan2Trainer(Trainer):
         for i, data in enumerate(tqdm(self.dataset)):
             try:
                 self.GAN.D_opt.zero_grad()
-
-
                 image_batch = data.cuda(self.rank)
-                image_batch.requires_grad_()
-
-
-                """Random noise"""
-                # noise = image_noise(batch_size, image_size, device=self.rank)
-                # position_textures = noise
+                image_batch = image_batch.requires_grad_()
 
                 """Non random input (position textures encoded as noise)"""
-                position_textures = self.dataset.load_current_batch_position_textures()
-                position_textures = torch.permute(position_textures, (0, 2, 3, 1))
+                if self.conditional_input:
+                    position_textures = self.dataset.load_current_batch_position_textures()
+                else:
+                    position_textures = None
+
+
                 fake_texture_batch = self.generate_fake_texture(position_textures=position_textures)
-
-
                 fake_renders = self.dataset.get_fake_data(fake_texture_batch)
 
                 fake_output, _ = D_aug(fake_renders.clone().detach(), detach = True, **aug_kwargs)
@@ -1118,17 +1103,13 @@ class StyleGan2Trainer(Trainer):
 
 
                 
-                #takze proste pocitame ez loss 2 vektoru
-
                 divergence = D_loss_fn(real_output_loss, fake_output_loss)
                 disc_loss = divergence
 
 
-                # if apply_gradient_penalty:
-                #     gp = gradient_penalty(image_batch, real_output)
-                #     self.last_gp_loss = gp.clone().detach().item()
-                #     self.track(self.last_gp_loss, 'GP')
-                #     disc_loss = disc_loss + gp
+                if apply_gradient_penalty:
+                    gp = gradient_penalty(image_batch, real_output)
+                    disc_loss = disc_loss + gp
 
                 disc_loss = disc_loss / self.gradient_accumulate_every
                 disc_loss.register_hook(raise_if_nan)
@@ -1196,13 +1177,20 @@ class StyleGan2Trainer(Trainer):
                     self.load(self.checkpoint_num)
                     raise NanException
 
-                if i % 50 == 0:
-                    fid_score = self.compute_fid_score()
+                if i % self.evaluate_every == 0:
+
+                    loss_logs = {'generator loss': gen_loss.detach().item(),
+                                 'discriminator loss': divergence.detach().item()
+                                 }
+
                     visual_data = self.visualize_data()
 
-                    all_logs = {**fid_score, **visual_data}
+                    all_logs = {**visual_data, **loss_logs}
 
                     wandb.log(all_logs)
+
+
+                self.steps+=1
 
 
             except Exception as e:
@@ -1216,59 +1204,39 @@ class StyleGan2Trainer(Trainer):
 
             S = self.GAN.S 
             G = self.GAN.G 
+            E = self.GAN.E
 
             latent_dim = self.GAN.G.latent_dim
             num_layers = self.GAN.G.num_layers
 
-            """Use random noise as position textures if no provided"""
+
             if position_textures is None:
-                noise = image_noise(self.batch_size, self.image_size, device=self.rank)
-                position_textures = noise
-            
-            assert position_textures.shape[3] == 3 or position_textures.shape[3] == 1
+                noise = image_noise(self.number_of_meshes_per_iteration, self.image_size, device=self.rank)
+                get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
+                style = get_latents_fn(self.number_of_meshes_per_iteration, num_layers, latent_dim, device=self.rank)
+                w_space = latent_to_w(S, style)
+                w_styles = styles_def_to_tensor(w_space)
+            else:
+                noise = image_noise(position_textures.size(0), self.image_size, device=self.rank)
+                encoded_uv_textures = E(position_textures)
+                w_styles = replicate_tensor(encoded_uv_textures, num_layers) 
 
-
-            get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
-
-            style = get_latents_fn(self.batch_size, num_layers, latent_dim, device=self.rank)
-            w_space = latent_to_w(S, style)
-
-            w_styles = styles_def_to_tensor(w_space)
-
-            fake_texture = G(w_styles, position_textures)
+            fake_texture = G(w_styles, noise)
             return fake_texture
 
     def generate_texture_for_object(self, index):
         """
         Generates texture for specific object
         output shape: (1,3,self.image_size, self.image_size)
-        
         """
-        position_texture = self.dataset.load_specific_position_textures(index=index)
-        position_texture = torch.permute(position_texture, (0, 2, 3, 1))
-        generated_texture = self.generate_fake_texture(position_textures=position_texture)
+        if self.conditional_input:
+            position_texture = self.dataset.load_specific_position_textures(index=index)
+        else:
+            position_texture = None
+        generated_texture = self.generate_fake_texture(position_texture)
         generated_texture = generated_texture[:1, :, :, :]
-        return generated_texture
+        return generated_texture, position_texture
 
-    @torch.no_grad()
-    def visualize_data(self, index=2):
-
-        decoded_texture1 = self.generate_texture_for_object(index)
-        
-
-
-        rendered_views_using_texture1 = self.dataset.get_multiple_views(
-            index, decoded_texture1
-        )
-        
-
-        view_grid1 = vutils.make_grid(rendered_views_using_texture1, normalize=True)
-        texture1 = vutils.make_grid(decoded_texture1, normalize=True)
-
-        return {
-                "view_grid1/": wandb.Image(view_grid1),
-                "texture1/": wandb.Image(texture1),
-            }
 
     
     # @torch.no_grad()
@@ -1347,35 +1315,6 @@ class StyleGan2Trainer(Trainer):
         rmtree(str(self.config_path), True)
         self.init_folders()
 
-    # def save(self):
-    #     save_data = {
-    #         'GAN': self.GAN.state_dict(),
-    #         'version': __version__
-    #     }
-
-    #     torch.save(save_data, self.model_name(self.epoch))
-    #     self.write_config()
-
-    # def load(self, num = -1):
-    #     self.load_config()
-
-    #     name = num
-    #     if num == -1:
-    #         file_paths = [p for p in Path(self.models_dir / self.name).glob('model_*.pt')]
-    #         saved_nums = sorted(map(lambda x: int(x.stem.split('_')[1]), file_paths))
-    #         if len(saved_nums) == 0:
-    #             return
-    #         name = saved_nums[-1]
-    #         print(f'continuing from previous epoch - {name}')
-
-    #     model_path = self.models_dir / self.name / f"model_{name}.pt"
-
-    #     self.init_GAN()
-
-
-    #     load_data = torch.load(model_path)
-    #     self.GAN.load_state_dict(load_data['GAN'])
-    #     self.epoch = name + 1
 
 
 

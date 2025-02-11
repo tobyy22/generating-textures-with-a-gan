@@ -1,12 +1,17 @@
 # Generating textures with a GAN
 
-Year project.
-
-Currently has 2 parts. 
-First one is texture prediction using the differentiable renderer. 
-Second part is the actual GAN. 
 
 ## Getting started
+
+docker pull tobiasvavroch/generating-textures-image
+docker run -it -v $(pwd):/app --gpus all tobiasvavroch/generating-textures-image /bin/bash
+conda activate pytorch3denv
+
+
+
+
+
+
 
 To clone the repository, run:
 ```
@@ -17,12 +22,14 @@ Create new conda environment and install pytorch3d library:
 ```
 conda create -n pytorch3denv
 conda activate pytorch3denv
-conda install pytorch torchvision torchaudio cudatoolkit=11.6 -c pytorch -c conda-forge
+conda install pytorch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1  pytorch-cuda=11.8 -c pytorch -c nvidia
 conda install -c fvcore -c iopath -c conda-forge fvcore iopath
-conda install -c bottler nvidiacub
-conda install pytorch3d -c pytorch3d
+curl -LO https://github.com/NVIDIA/cub/archive/1.10.0.tar.gz
+tar xzf 1.10.0.tar.gz
+export CUB_HOME=$PWD/cub-1.10.0
 conda install matplotlib
 conda install -c conda-forge wandb
+conda install pytorch3d -c pytorch3d
 ```
 
 More information: https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md

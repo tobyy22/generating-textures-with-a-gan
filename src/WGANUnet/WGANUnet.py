@@ -1,54 +1,13 @@
 #!/usr/bin/env python
 
-import sys
-import pathlib
-
-p = pathlib.Path(__file__).parents[1]
-sys.path.append(str(p))
 
 import torch
 import torch.nn as nn
 import torch.utils.data
 
+from src.custom_models.discriminators import DiscriminatorW
 
-"""TOOD: Rewrite it similary to stylegan2 implementation
-put gans files into one file
-generate_fake_texture function
-function naming
-"""
 
-class DiscriminatorW(nn.Module):
-    def __init__(self, ngpu):
-        super(DiscriminatorW, self).__init__()
-
-        ndf = 64
-        nc = 3
-
-        self.ngpu = ngpu
-        self.main = nn.Sequential(
-            # input is (nc) x 64 x 64
-            nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
-            nn.LeakyReLU(0.2, inplace=False),
-            # state size. (ndf) x 32 x 32
-            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 2),
-            nn.LeakyReLU(0.2, inplace=False),
-            # state size. (ndf*2) x 16 x 16
-            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 4),
-            nn.LeakyReLU(0.2, inplace=False),
-            # state size. (ndf*4) x 8 x 8
-            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 8),
-            nn.LeakyReLU(0.2, inplace=False),
-            # state size. (ndf*8) x 4 x 4
-            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
-            # nn.Sigmoid()
-        )
-
-    def forward(self, input):
-        return self.main(input)
-    
 
 class Encoder(nn.Module):
     def __init__(self, ngpu, non_random_part_size=50):
@@ -74,32 +33,33 @@ class Encoder(nn.Module):
         self.relu4=nn.LeakyReLU(0.2, inplace=False)
             # state size. (ndf*8) x 4 x 4
         self.conv5=nn.Conv2d(ndf * 8, non_random_part_size, 4, 1, 0, bias=False)
-            # nn.Sigmoid()
+        self.tan = nn.Tanh()
 
-    def forward(self, input):
+    def forward(self, x):
         outs = []
-        input=self.conv1(input)
-        input=self.relu1(input)
-        outs.append(input)
+        x=self.conv1(x)
+        x=self.relu1(x)
+        outs.append(x)
             # state size. (ndf) x 32 x 32
-        input=self.conv2(input)
-        input=self.batch1(input)
-        input=self.relu2(input)
-        outs.append(input)
+        x=self.conv2(x)
+        x=self.batch1(x)
+        x=self.relu2(x)
+        outs.append(x)
             # state size. (ndf*2) x 16 x 16
-        input=self.conv3(input)
-        input=self.batch2(input)
-        input=self.relu3(input)
-        outs.append(input)
+        x=self.conv3(x)
+        x=self.batch2(x)
+        x=self.relu3(x)
+        outs.append(x)
             # state size. (ndf*4) x 8 x 8
-        input=self.conv4(input)
-        input=self.batch3(input)
-        input=self.relu4(input)
-        outs.append(input)
+        x=self.conv4(x)
+        x=self.batch3(x)
+        x=self.relu4(x)
+        outs.append(x)
             # state size. (ndf*8) x 4 x 4
-        input=self.conv5(input)
+        x=self.conv5(x)
+        x=self.tan(x)
 
-        return input,outs
+        return x,outs
 
 
 class Decoder(nn.Module):
@@ -113,7 +73,7 @@ class Decoder(nn.Module):
 
         self.ngpu = ngpu
 
-        self.conv1 = nn.ConvTranspose2d( nz, ngf * 8, 4, 1, 0, bias=False)
+        self.conv1 = nn.ConvTranspose2d(nz, ngf * 8, 4, 1, 0, bias=False)
         self.batch1=nn.BatchNorm2d(ngf * 8)
         self.relu1=nn.ReLU(False)
             # state size. (ndf) x 32 x 32
@@ -133,44 +93,41 @@ class Decoder(nn.Module):
         self.conv5=nn.ConvTranspose2d(ngf*2, nc, 4, 2, 1, bias=False)
         self.tan = nn.Tanh()
 
-    def forward(self, input, middle_layers):
-        input=self.conv1(input)
-        input=self.batch1(input)
-        input=self.relu1(input)
+    def forward(self, x, skip_connections):
 
-        input = torch.cat((input, middle_layers[-1]), dim=1)
+        x=self.conv1(x)
+        x=self.batch1(x)
+        x=self.relu1(x)
+
+        x = torch.cat((x, skip_connections[-1]), dim=1)
     
-        input=self.conv2(input)
-        input=self.batch2(input)
-        input=self.relu2(input)
+        x=self.conv2(x)
+        x=self.batch2(x)
+        x=self.relu2(x)
 
 
-        input = torch.cat((input, middle_layers[-2]), dim=1)
+        x = torch.cat((x, skip_connections[-2]), dim=1)
 
+        x=self.conv3(x)
+        x=self.batch3(x)
+        x=self.relu3(x)
 
-        input=self.conv3(input)
-        input=self.batch3(input)
-        input=self.relu3(input)
+        x = torch.cat((x, skip_connections[-3]), dim=1)
 
-        input = torch.cat((input, middle_layers[-3]), dim=1)
+        x=self.conv4(x)
+        x=self.batch4(x)
+        x=self.relu4(x)
 
-        input=self.conv4(input)
-        input=self.batch4(input)
-        input=self.relu4(input)
+        x = torch.cat((x, skip_connections[-4]), dim=1)
 
-        input = torch.cat((input, middle_layers[-4]), dim=1)
+        x=self.conv5(x)
+        x = self.tan(x)
 
-        input=self.conv5(input)
-        input = self.tan(input)
-
-        return input
-
-
-
+        return x
 
 
 class WGANUnet(nn.Module):
-    def __init__(self, lr=0.0002, ngpu=1, device='cuda:0'):
+    def __init__(self, lr, ngpu, device, latent_vector_size=100, non_random_part_size=50):
         super().__init__()
 
         self.lr = lr
@@ -179,9 +136,9 @@ class WGANUnet(nn.Module):
 
 
         """Generator"""
-        self.encoder = Encoder(self.ngpu).to(self.device)
+        self.encoder = Encoder(self.ngpu, non_random_part_size=non_random_part_size).to(self.device)
         self.encoder.apply(WGANUnet.weights_init)
-        self.decoder = Decoder(self.ngpu).to(self.device)
+        self.decoder = Decoder(self.ngpu, latent_vector_size=latent_vector_size).to(self.device)
         self.decoder.apply(WGANUnet.weights_init)
         """Discriminator"""
         self.discriminator = DiscriminatorW(self.ngpu).to(self.device)

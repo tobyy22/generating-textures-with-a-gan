@@ -1,19 +1,34 @@
-from src_c.StyleGAN2.stylegan2_pytorch import StyleGan2Trainer
+import wandb
+
+from src.StyleGAN2.stylegan2_pytorch import StyleGan2Trainer
+
+from src.set_seed import set_seed
+
+# Set seed for reproducibility
+set_seed()
+
 
 
 
 if __name__ == '__main__':
-    model = StyleGan2Trainer(name='model8', 
-                             models_dir='./my_data/Stylegan2_newstructure/', 
-                             pre_generated_uv_textures_dir='my_data/uv_textures_128',
-                             uv_textures_pregenerated=True)
-    model.prepare_for_training()
-    # model.load()
-    model.train_model()
-    # model.load()
-    # model.visualize_data2('pngs/fake_model3', index=2)
-    # model.clear()
+    model = StyleGan2Trainer(name='model_without_conditional_input', 
+                             models_dir='./my_data/StyleGAN2/', 
+                             uv_textures_pregenerated=True,
+                             conditional_input=False,
+                             image_size=256,
+                             texture_size=128
+                             )
+
+    # model.prepare_for_training()
     # model.train_model()
+    model.load()
+    model.init_dataset()
+    for _ in range(20):
+        data = model.visualize_data(888)
+        wandb.log(data)
+
     # fid = model.compute_fid_score()
 
     # print(fid)
+    #model11 high res without con
+    #model 12 high res with con

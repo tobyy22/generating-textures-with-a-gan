@@ -14,26 +14,10 @@ import matplotlib.pyplot as plt
 
 
 
-def get_uv_texture(obj_filename, device, image_size=64):
+def get_uv_texture(obj_filename, device, image_size=1024):
 
-
-    #obj_filename = 'data/wood/cube3flip3_shared.obj'
     obj_mesh = pytorch3d.io.load_objs_as_meshes([obj_filename], device=device)
-
-    # print(obj_mesh.textures._maps_padded.shape)
-
-    # obj_mesh.textures._maps_padded = torch.zeros(size = (1, 1024, 1024, 3), device=device)
-
-    # print(obj_mesh.textures.verts_uvs_list())
-
-
-    # # show the original UV map
-    # plt.imshow(obj_mesh.textures.maps_list()[0])
-
-
-    # In[44]:
-
-
+    
     # create a fake 3D object - just triangles in a plane
     #  - positions: (X, Y) == (U, V)
     #  - colors: (R, G, B) == (X, Y, Z) or (R, G, B) == normals
