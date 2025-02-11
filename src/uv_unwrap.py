@@ -4,6 +4,11 @@ import argparse
 import os
 import shutil
 
+
+"""
+Script for UV unwrapping using Blender. 
+"""
+
 # Parse command-line arguments
 def parse_args():
     parser = argparse.ArgumentParser(description="Blender UV Unwrap Script")
