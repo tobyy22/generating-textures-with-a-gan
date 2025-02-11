@@ -1,20 +1,30 @@
 #!/usr/bin/env python
-# coding: utf-8
 
 
 
-#import numpy as np
 import torch
 import pytorch3d
 import pytorch3d.io
-import matplotlib.pyplot as plt
 
 
 
+def get_uv_texture(obj_filename, device, image_size=128):
+    """
+    Generates a UV texture from a 3D object file (.obj) and returns it as a torch tensor.
 
+    This function loads a 3D object file (OBJ format), extracts its UV coordinates, and
+    generates a texture by mapping vertex positions or normals to colors. The resulting
+    UV texture is rendered using PyTorch3D's rasterizer and returned as a torch tensor.
 
+    Args:
+        obj_filename (str): The path to the .obj file containing the 3D object.
+        device (torch.device): The PyTorch device (CPU or GPU) on which computations will be performed.
+        image_size (int, optional): The resolution of the output texture image (default: 1024).
 
-def get_uv_texture(obj_filename, device, image_size=1024):
+    Returns:
+        torch.Tensor: A rendered UV texture image of shape (image_size, image_size, 3),
+        representing the RGB color mapping of the object's UV coordinates.
+    """
 
     obj_mesh = pytorch3d.io.load_objs_as_meshes([obj_filename], device=device)
     
@@ -41,12 +51,6 @@ def get_uv_texture(obj_filename, device, image_size=1024):
 
     normals = obj_mesh.verts_normals_list()[0] / 2 + .5 # -1..1 to 0..1
 
-    # print('faces', faces.dtype, faces.shape, faces.max())
-    # print('face_uv_idx', face_uv_idx.dtype, face_uv_idx.shape, face_uv_idx.max())
-    # print('uvs', uvs.dtype, uvs.shape, uvs.min(), uvs.max())
-    # print('verts', verts.dtype, verts.shape, verts.min(), verts.max())
-    # print('normals', normals.dtype, normals.shape, normals.min(), normals.max())
-
     for fi, f in enumerate(faces):
         assert f.shape == torch.Size([3]) # triangle (vertex indices)
         assert uvs[face_uv_idx[fi]].shape == torch.Size([3, 2]) # UV coords (2 values)
@@ -65,8 +69,6 @@ def get_uv_texture(obj_filename, device, image_size=1024):
     triangle_verts = torch.cat(triangle_verts)
     triangle_faces = torch.Tensor(triangle_faces).to(device)
     vertex_colors = torch.cat(vertex_colors)
-
-    # print(triangle_verts.shape, triangle_faces.shape, vertex_colors.shape)
 
 
 
