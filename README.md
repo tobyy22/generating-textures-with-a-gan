@@ -1,68 +1,142 @@
-# Generating textures with a GAN
+# Project Setup and Experiments
 
+## Registering on Weights & Biases (wandb)
+To log experimental data, create an account on the platform [Weights & Biases](https://wandb.ai/).
+In your user settings, you will find an API key. Store it securely.
 
-## Getting started
+## Source Code
+Clone the project using the following command:
 
+```bash
+git clone --branch main --depth 1 \
+    git@github.com:tobyy22/generating-textures-with-a-gan.git
+```
+
+## Dataset and Test Data
+The dataset and test data are available on the MFF UK server. They will be accessible in the environment once mounted into the Docker container (see below).
+
+## Environment Setup
+The entire project runs in a Docker environment. First, you need to build a new image from the `Dockerfile` in the project repository using the following command (though a pre-built image is available in the next step):
+
+```bash
+docker build -t generating-textures-image .
+```
+
+To simplify the process, a pre-built image is available on Docker Hub and can be downloaded with:
+
+```bash
 docker pull tobiasvavroch/generating-textures-image
-docker run -it -v $(pwd):/app --gpus all tobiasvavroch/generating-textures-image /bin/bash
+```
+
+The downloaded image contains only the prepared environment, not the source code. The source code can be mounted into the container when it is run.
+
+## Running the Environment
+Run the environment with GPU support and mount the current directory to `/app`:
+
+```bash
+docker run -it -v $(pwd):/app \
+   -v /projects/3DDatasets/3D-FUTURE/3D-FUTURE-model:/app/3Dataset \
+   -v /projects/tobiasvavroch_bc_data:/app/my_data  --gpus all \
+   tobiasvavroch/generating-textures-image /bin/bash
 conda activate pytorch3denv
-
-
-
-
-
-
-
-To clone the repository, run:
-```
-git clone git@gitlab.mff.cuni.cz:vavrocht/generating-textures-with-a-gan.git
-```
-Make sure conda is installed. Checkout https://engineeringfordatascience.com/posts/install_miniconda_from_the_command_line/. 
-Create new conda environment and install pytorch3d library:
-```
-conda create -n pytorch3denv
-conda activate pytorch3denv
-conda install pytorch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1  pytorch-cuda=11.8 -c pytorch -c nvidia
-conda install -c fvcore -c iopath -c conda-forge fvcore iopath
-curl -LO https://github.com/NVIDIA/cub/archive/1.10.0.tar.gz
-tar xzf 1.10.0.tar.gz
-export CUB_HOME=$PWD/cub-1.10.0
-conda install matplotlib
-conda install -c conda-forge wandb
-conda install pytorch3d -c pytorch3d
+wandb login
 ```
 
-More information: https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md
+You will need to log in using your API key.
+Once the environment is activated, you can run experiments. Each experiment automatically creates a new run in `wandb`, where the logged results can be monitored.
 
-The project is split into two parts: 
-1. Texture prediction via differentiable rendering
-2. Training a GAN to produce suitable textures
+## Running Experiments
+Now everything is set up to run experiments.
 
-Make sure to execute all code from the generating-textures-with-a-gan directory.
-Also note, that the project structure is fixed (TODO: give an option to store data where user wants).
+### Experiment with Texture Optimization [Section Reference: Experiment Gradient Rasterizer]
 
-I recommend to run the project on mayrau server where the 3DDataset is stored. 
-
-
-## Texture prediction
-
-To run grid search:
-```
-python src/texture_optimization/predict_texture.py
+### Cow Model Optimization
+```bash
+python3 src/texture_optimization/optimize_cow.py
 ```
 
-Hyperparameters can be eddited in src/texture_optimization/predict_texture.py in class TextureOptimizationGridSearch - variable self.param_grid.
-After grid search is finished, 2 combinations of best parameters will be computed on the basis of two different metrics.
-
-TODO: Use the parameters from grid search for texture optimization. (It is implemented in in predict_texture.ipynb, just needs to be rewritten to normal python).
-
-## GAN training
-
-To train a GAN:
-```
-python src/GAN/train_WGAN_renderer.py 
+### Grid Search for Optimization Parameters
+```bash
+python3 src/texture_optimization/run_grid_search.py
 ```
 
-Both networks will be stored in my_data/GAN_model. 
-If networks are present in this directory, they will be loaded. Otherwise new networks will be initialized.
-Data (textures and views rendered with those textures) will be logged in wandb. 
+### Overfitting Experiment with GAN and WGAN [Section Reference: Overfitting GAN]
+```bash
+python3 src/DCWGAN/overfit_gan.py
+```
+
+To switch between GAN and WGAN, set the `wgan` parameter to `True/False`.
+
+### WGAN + Rasterizer Experiment [Section Reference: WGAN Rasterizer]
+
+**Training:**
+```bash
+python3 src/DCWGAN/train_dcwgan_renderer.py
+```
+
+**Training with Higher Resolution:**
+```bash
+python3 src/DCWGAN/train_dcwgan_renderer_higher_resolution.py
+```
+
+**Visualizing Results:**
+```bash
+python3 src/evaluate_models.py --trainer DCWGANRenderer \
+    --visualize_results --visualized_object_id 1433
+```
+
+**Computing FID Score (runs for a long time):**
+```bash
+python3 src/evaluate_models.py \
+    --trainer DCWGANRenderer \
+    --evaluate_fid_score
+```
+
+### U-Net + Rasterizer Experiment [Section Reference: U-Net Rasterizer]
+
+**Training:**
+```bash
+python3 src/PytorchMRIUnet/train.py
+```
+
+**Training with Similarity Loss:**
+```bash
+python3 src/PytorchMRIUnet/train_with_similarity_loss.py
+```
+
+**Visualizing Results:**
+```bash
+python3 src/evaluate_models.py --trainer PytorchUnet \
+    --visualize_results --visualized_object_id 1433
+```
+
+**Computing FID Score (runs for a long time):**
+```bash
+python3 src/evaluate_models.py \
+    --trainer PytorchUnet \
+    --evaluate_fid_score
+```
+
+For the similarity loss experiment, select `PytorchUnetSimilarityLoss` as the `trainer`.
+
+To reproduce the experiment with a custom U-Net, use the `WGANUnet` directory similarly.
+
+### UV Unwrapping Using Blender
+The following command performs UV unwrapping for a sample object file without a texture. It creates a black texture as a placeholder so that PyTorch3D can correctly load the model. The resulting directory can then be used as a single-element dataset for evaluation.
+
+```bash
+blender --background --python src/uv_unwrap.py -- \
+    --obj_path my_data/octopus_object/octopus.obj \
+    --export_dir ./octopus_unwrapped
+```
+
+You can then use the previous scripts with this dataset, for example:
+
+```bash
+python3 src/evaluate_models.py --trainer PytorchUnet \
+    --visualize_results --visualized_object_id 0 \
+    --dataset_path ./octopus_unwrapped
+```
+
+Results will again be available in `wandb`. 
+
