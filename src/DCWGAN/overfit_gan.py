@@ -95,7 +95,6 @@ class DCWGANTrainer(DCWGANTrainerParent):
             output = self.GAN.discriminator(fake).view(-1)
             errG = self.loss_function(output, real_flag=True, device=self.device)
             errG.backward()
-            D_G_z2 = output.mean().item()
             self.GAN.generator_optimizer.step()
 
             # Logging training metrics
@@ -114,13 +113,10 @@ if __name__ == "__main__":
     agent = DCWGANTrainer(
         num_epochs=4000,
         name='model',
-        models_dir='my_data/DCWGAN',
-<<<<<<< HEAD
+        models_dir='fresh_data/DCWGAN',
         wgan=True,
         image_size=64
-=======
-        wgan=True
->>>>>>> 2320bde642d217f0717b24db9f1c728d1b28a447
+
     )
     
     # Prepare model for training and start the training process
