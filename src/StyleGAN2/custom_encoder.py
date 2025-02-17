@@ -21,7 +21,7 @@ class CustomEncoder(nn.Module):
         )
 
         reduced_size = self.image_size // 4
-        self.encoded_features = 32 * reduced_size * reduced_size
+        self.encoded_features = 32 * 4 * reduced_size * reduced_size
 
         self.flatten = nn.Flatten()
         self.encoder_fc = nn.Linear(self.encoded_features, self.latent_vector_size)
