@@ -15,9 +15,8 @@ import torch.utils.data
 
 
 from src.WGANUnet.WGANUnet import WGANUnet
-from src.losses import wasserstein_loss, similarity_loss, similarity_loss_old
+from src.losses import wasserstein_loss
 from src.GANTrainer import Trainer
-from src.utils.helper_functions import save_tensors_to_png, add_dynamic_noise_to_tensors
 
 
 from src.set_seed import set_seed
