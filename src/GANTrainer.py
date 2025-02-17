@@ -162,9 +162,9 @@ class Trainer:
             file_paths = [p for p in Path(self.models_dir / self.name).glob('model_*.pt')]
             saved_nums = sorted(map(lambda x: int(x.stem.split('_')[1]), file_paths))
             if len(saved_nums) == 0:
-                return
+                raise ValueError('No model found.')
             name = saved_nums[-1]
-        print(f'continuing from previous epoch - {name}')
+        print(f'Model loaded: {name}')
 
         model_path = self.models_dir / self.name / f"model_{name}.pt"
 
