@@ -44,18 +44,13 @@ ENV PATH="$CONDA_DIR/bin:$PATH"
 RUN conda init bash
 
 
-# Create a new conda environment and install PyTorch3D dependencies
 RUN conda create -n pytorch3denv -y && \
     conda run -n pytorch3denv conda install -y \
-    pytorch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1  pytorch-cuda=11.8 -c pytorch -c nvidia && \
-    conda run -n pytorch3denv conda install -y -c fvcore -c iopath -c conda-forge fvcore iopath && \
-    conda run -n pytorch3denv conda install -y -c bottler nvidiacub && \
-    conda run -n pytorch3denv conda install -y matplotlib && \
-    conda run -n pytorch3denv conda install -y -c conda-forge wandb && \
-    conda run -n pytorch3denv conda install -y -c pytorch3d pytorch3d
+    pytorch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 pytorch-cuda=11.8 \
+    fvcore iopath nvidiacub matplotlib wandb pytorch3d \
+    -c pytorch -c nvidia -c fvcore -c iopath -c conda-forge -c bottler -c pytorch3d && \
+    conda run -n pytorch3denv pip install pytorch_fid kornia vector_quantize_pytorch einops aim
 
-
-# RUN conda run -n pytorch3denv pip install pytorch_fid kornia vector_quantize_pytorch einops aim
 
 WORKDIR /app
 ENV PYTHONPATH=/app
