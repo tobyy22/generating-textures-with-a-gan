@@ -770,7 +770,7 @@ class StyleGAN2(nn.Module):
         """
         self.E = None
         if conditional_input: 
-            self.E = CustomEncoder(latent_dim, texture_size[0])
+            self.E = CustomEncoder(latent_dim)
 
         self.SE = StyleVectorizer(latent_dim, style_depth, lr_mul = lr_mlp)
         self.GE = Generator(texture_size, latent_dim, network_capacity, transparent = transparent, attn_layers = attn_layers, no_const = no_const)
@@ -904,15 +904,6 @@ class StyleGan2Trainer(Trainer):
         self.GAN_params = [args, kwargs]
         self.GAN = None
 
-        # self.name = name
-        # self.epoch=0
-
-        # base_dir = Path(base_dir)
-        # self.base_dir = base_dir
-        # self.results_dir = base_dir / results_dir
-        # self.models_dir = base_dir / models_dir
-        # # self.fid_dir = base_dir / 'fid' / name
-        # self.config_path = self.models_dir / name / '.config.json'
 
         assert log2(image_size).is_integer(), 'image size must be a power of 2 (64, 128, 256, 512, 1024)'
         self.image_size = image_size
