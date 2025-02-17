@@ -29,7 +29,7 @@ def image_noise(n, im_size, device):
 
 class AutoEncoderTrainer(Trainer):
 
-    def __init__(self, uv_textures_directory, random_size=50, lr=0.0001, batch_size=8, latent_vector_size=64, **kwargs):
+    def __init__(self, uv_textures_directory, lr=0.0001, batch_size=8, latent_vector_size=64, **kwargs):
         """
         Initialize DCWGANTrainerParent with configuration for GAN training.
 
