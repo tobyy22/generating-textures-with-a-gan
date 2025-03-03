@@ -83,7 +83,7 @@ python3 src/DCWGAN/train_dcwgan_renderer_higher_resolution.py
 **Visualizing Results:**
 ```bash
 python3 src/evaluate_models.py --trainer DCWGANRenderer \
-    --visualize_results --visualized_object_id 1433
+    --visualize_results --visualized_object_id 888
 ```
 
 **Computing FID Score (runs for a long time):**
@@ -108,7 +108,7 @@ python3 src/PytorchMRIUnet/train_with_similarity_loss.py
 **Visualizing Results:**
 ```bash
 python3 src/evaluate_models.py --trainer PytorchUnet \
-    --visualize_results --visualized_object_id 1433
+    --visualize_results --visualized_object_id 888
 ```
 
 **Computing FID Score (runs for a long time):**
@@ -121,6 +121,51 @@ python3 src/evaluate_models.py \
 For the similarity loss experiment, select `PytorchUnetSimilarityLoss` as the `trainer`.
 
 To reproduce the experiment with a custom U-Net, use the `WGANUnet` directory similarly.
+
+### StyleGAN2 experiments
+
+**Training autoencoder:**
+```bash
+python3 src/StyleGAN2/train_autoencoder_with_stylegan_generator.py
+```
+
+**Training without encoder:**
+```bash
+python3 src/StyleGAN2/train.py
+```
+
+**Visualize results without encoder:**
+```bash
+python3 src/evaluate_models.py --trainer StyleGAN2WithoutEncoder \
+    --visualize_results --visualized_object_id 888
+```
+
+**Training with encoder:**
+```bash
+python3 src/StyleGAN2/train_with_encoder.py
+```
+
+**Visualize results with encoder:**
+```bash
+python3 src/evaluate_models.py --trainer StyleGAN2WithEncoder \
+    --visualize_results --visualized_object_id 888
+```
+
+
+
+
+**Visualizing Results:**
+```bash
+python3 src/evaluate_models.py --trainer PytorchUnet \
+    --visualize_results --visualized_object_id 888
+```
+
+**Computing FID Score (runs for a long time):**
+```bash
+python3 src/evaluate_models.py \
+    --trainer PytorchUnet \
+    --evaluate_fid_score
+```
 
 ### UV Unwrapping Using Blender
 The following command performs UV unwrapping for a sample object file without a texture. It creates a black texture as a placeholder so that PyTorch3D can correctly load the model. The resulting directory can then be used as a single-element dataset for evaluation.

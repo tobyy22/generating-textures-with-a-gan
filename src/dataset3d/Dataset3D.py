@@ -73,6 +73,16 @@ class DataLoader:
             with open(self.invalid_data_file, "rb") as input_file:
                 self.invalid_data = pickle.load(input_file)
 
+            # Define the old dataset prefix 
+            if self.invalid_data:
+                old_prefix = os.path.commonpath(self.invalid_data)
+
+                # Replace old prefix with self.dataset_directory
+                self.invalid_data = [
+                    os.path.join(self.dataset_directory, os.path.relpath(path, old_prefix))
+                    for path in self.invalid_data
+        ]
+        
         # Iterate through dataset directory to gather valid entries
         for dire in os.listdir(self.dataset_directory):
             obj_filename = os.path.join(self.dataset_directory, dire, "normalized_model.obj")

@@ -66,7 +66,7 @@ class AutoEncoderTrainer(Trainer):
 
     def init_GAN(self):
         self.E = CustomEncoder(latent_vector_size=self.latent_vector_size).to(self.device)
-        self.G = Generator(image_size=128, latent_dim=self.latent_vector_size).to(self.device)
+        self.G = Generator(image_size=self.image_size, latent_dim=self.latent_vector_size).to(self.device)
         self.GAN = self.G
         model_params = list(self.E.parameters()) + list(self.G.parameters())
         self.optimizer = torch.optim.Adam(model_params, lr=self.lr)
@@ -84,7 +84,7 @@ class AutoEncoderTrainer(Trainer):
 
             # Replicating for each batch
             encoded_textures_vector = replicate_tensor(encoded_uv_textures, self.G.num_layers)
-            noise = image_noise(encoded_textures_vector.size(0), 128, device=self.device)
+            noise = image_noise(encoded_textures_vector.size(0), self.image_size, device=self.device)
 
             # Forward pass through the encoder and decoder
             decoded_textures1 = self.G(encoded_textures_vector, noise)
@@ -98,14 +98,14 @@ class AutoEncoderTrainer(Trainer):
             decoded_textures_grid1 = vutils.make_grid(decoded_textures1, normalize=True)
 
             if i % self.evaluate_every == 0:
-                wandb.log({"decoded_textures_grid1": wandb.Image(decoded_textures_grid1),
+                wandb.log({"decoded_textures_grid": wandb.Image(decoded_textures_grid1),
                             "uv_textures_grid":  wandb.Image(uv_textures),
                             "MSE loss": loss.item(),
                           }
                          )
 
 if __name__ == "__main__":
-    trainer = AutoEncoderTrainer(num_epochs=10,latent_vector_size=512,batch_size=8, uv_textures_directory='/projects/tobiasvavroch_bc_data/uv_textures_128', name='model', models_dir='fresh_data/stylegan2_autoencoder')
+    trainer = AutoEncoderTrainer(num_epochs=10,latent_vector_size=512,batch_size=8, uv_textures_directory='./my_data/uv_textures_128', name='model', models_dir='fresh_data/stylegan2_autoencoder')
     trainer.prepare_for_training()
     trainer.train_model()
 
