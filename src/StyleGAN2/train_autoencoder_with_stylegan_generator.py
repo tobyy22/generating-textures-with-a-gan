@@ -23,10 +23,6 @@ set_seed()
 def image_noise(n, im_size, device):
     return torch.FloatTensor(n, im_size, im_size, 1).uniform_(0., 1.).to(device)
 
-
-
-
-
 class AutoEncoderTrainer(Trainer):
 
     def __init__(self, uv_textures_directory, lr=0.0001, batch_size=8, latent_vector_size=64, **kwargs):
@@ -51,7 +47,7 @@ class AutoEncoderTrainer(Trainer):
         self.latent_vector_size = latent_vector_size
         self.lr = lr
         self.loss_function = nn.MSELoss()
-        self.image_size = 64
+        self.image_size = 128
     
     def init_dataset(self):
         dataset = UVTextureDataset(
@@ -70,7 +66,7 @@ class AutoEncoderTrainer(Trainer):
 
     def init_GAN(self):
         self.E = CustomEncoder(latent_vector_size=self.latent_vector_size).to(self.device)
-        self.G = Generator(image_size=64, latent_dim=self.latent_vector_size).to(self.device)
+        self.G = Generator(image_size=128, latent_dim=self.latent_vector_size).to(self.device)
         self.GAN = self.G
         model_params = list(self.E.parameters()) + list(self.G.parameters())
         self.optimizer = torch.optim.Adam(model_params, lr=self.lr)
@@ -83,13 +79,12 @@ class AutoEncoderTrainer(Trainer):
         # Iterate over the DataLoader
         for i, batch in enumerate(self.dataloader):
             self.optimizer.zero_grad()
-            uv_textures, target_textures = batch
-
+            uv_textures, _ = batch
             encoded_uv_textures = self.E(uv_textures)
 
+            # Replicating for each batch
             encoded_textures_vector = replicate_tensor(encoded_uv_textures, self.G.num_layers)
-
-            noise = image_noise(encoded_textures_vector.size(0), 64, device=self.device)
+            noise = image_noise(encoded_textures_vector.size(0), 128, device=self.device)
 
             # Forward pass through the encoder and decoder
             decoded_textures1 = self.G(encoded_textures_vector, noise)
@@ -110,7 +105,7 @@ class AutoEncoderTrainer(Trainer):
                          )
 
 if __name__ == "__main__":
-    trainer = AutoEncoderTrainer(num_epochs=10,latent_vector_size=512,batch_size=8, uv_textures_directory='my_data/uv_textures_64', name='model_2', models_dir='my_data/stylegan2_autoencoder')
+    trainer = AutoEncoderTrainer(num_epochs=10,latent_vector_size=512,batch_size=8, uv_textures_directory='/projects/tobiasvavroch_bc_data/uv_textures_128', name='model', models_dir='fresh_data/stylegan2_autoencoder')
     trainer.prepare_for_training()
     trainer.train_model()
 
