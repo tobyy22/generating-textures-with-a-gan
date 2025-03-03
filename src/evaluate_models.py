@@ -5,12 +5,14 @@ from src.DCWGAN.train_dcwgan_renderer import DCWGANRendererTrainer
 from src.WGANUnet.train import WGANUnetTrainer
 from src.PytorchMRIUnet.train import PytorchUnetTrainer
 from src.PytorchMRIUnet.train_with_similarity_loss import PytorchUnetSimilarityLossTrainer
+from src.StyleGAN2.stylegan2_pytorch import StyleGan2Trainer
+
 
 
 def main():
     parser = argparse.ArgumentParser(description="Train and evaluate models.")
     parser.add_argument("--trainer", type=str, required=True, choices=[
-        "DCWGANRenderer", "WGANUnet", "PytorchUnet", "PytorchUnetSimilarityLoss"
+        "DCWGANRenderer", "WGANUnet", "PytorchUnet", "PytorchUnetSimilarityLoss", "StyleGAN2WithoutEncoder", "StyleGAN2WithEncoder"
     ], help="Specify the trainer to use.")
     parser.add_argument("--evaluate_fid_score", action="store_true", help="Evaluate FID score.")
     parser.add_argument("--visualize_results", action="store_true", help="Visualize results.")
@@ -59,6 +61,25 @@ def main():
             uv_textures_pregenerated=True,
             dataset_path=args.dataset_path,
         )
+    elif args.trainer == "StyleGAN2WithoutEncoder":
+        agent = StyleGan2Trainer(name='model_without_encoder', 
+                             models_dir='./my_data/StyleGAN2/', 
+                             uv_textures_pregenerated=True,
+                             conditional_input=False,
+                             image_size=256,
+                             texture_size=128,
+                             dataset_path=args.dataset_path,
+                             )
+    elif args.trainer == "StyleGAN2WithEncoder":
+        agent = StyleGan2Trainer(name='model_with_encoder', 
+                             models_dir='./my_data/StyleGAN2/', 
+                             pre_generated_uv_textures_dir='my_data/uv_textures_128',
+                             uv_textures_pregenerated=True,
+                             conditional_input=True,
+                             image_size=256,
+                             texture_size=128,
+                             dataset_path=args.dataset_path,
+                             )
 
     # Load and initialize the dataset
     agent.load()
