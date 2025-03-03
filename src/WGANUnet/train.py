@@ -132,7 +132,7 @@ class WGANUnetTrainer(Trainer):
 if __name__ == "__main__":
     agent = WGANUnetTrainer(
                  name='model',
-                 models_dir='my_data/WGANUnet',
+                 models_dir='fresh_data/WGANUnet',
                  pre_generated_uv_textures_dir='my_data/uv_textures_64',
                  uv_textures_pregenerated=True,
                  image_size=64,

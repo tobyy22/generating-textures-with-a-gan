@@ -113,7 +113,7 @@ class DCWGANRendererTrainer(DCWGANTrainerParent):
 if __name__ == "__main__":
     agent = DCWGANRendererTrainer(
         name='model',
-        models_dir='my_data/WGANRendererHighResolution',
+        models_dir='fresh_data/WGANRendererHighResolution',
         wgan=True,
         num_epochs=5,
         evaluate_every=50,

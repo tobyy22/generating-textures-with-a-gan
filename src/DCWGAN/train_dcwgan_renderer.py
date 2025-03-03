@@ -108,7 +108,7 @@ if __name__ == "__main__":
     agent = DCWGANRendererTrainer(
         name='model',
         num_epochs=5,
-        models_dir='my_data/WGANRenderer',
+        models_dir='fresh_data/WGANRenderer',
         wgan=True,
         image_size=64,
         texture_size=64,

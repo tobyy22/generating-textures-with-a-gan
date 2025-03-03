@@ -132,7 +132,7 @@ class PytorchUnetSimilarityLossTrainer(Trainer):
 if __name__ == "__main__":
     agent = PytorchUnetSimilarityLossTrainer(
                  name='model_fresh',
-                 models_dir='my_data/PytorchMRIUnet',
+                 models_dir='fresh_data/PytorchMRIUnet',
                  pre_generated_uv_textures_dir='my_data/uv_textures_128',
                  pregenerate_uv_textures=False,
                  uv_textures_pregenerated=True,
