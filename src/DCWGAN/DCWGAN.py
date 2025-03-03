@@ -177,7 +177,7 @@ class DCGANExtended(nn.Module):
 
         # Optimizers
         self.generator_optimizer = torch.optim.Adam(self.generator.parameters(), lr=self.lr, betas=self.betas)
-        self.discriminator_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=self.lr/10, betas=self.betas)
+        self.discriminator_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=self.lr/13, betas=self.betas)
 
 
 

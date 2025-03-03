@@ -25,7 +25,7 @@ class TwoLayerAutoencoder(nn.Module):
         )
 
         reduced_size = self.image_size // 4
-        self.encoded_features = 32 * reduced_size * reduced_size
+        self.encoded_features = 32 * 4 * reduced_size * reduced_size
 
         self.flatten = nn.Flatten()
         self.encoder_fc = nn.Linear(self.encoded_features, self.latent_vector_size)
@@ -52,7 +52,7 @@ class TwoLayerAutoencoder(nn.Module):
         decoded_features = decoded_flat.view(-1, 32, reduced_size, reduced_size)
         decoded = self.decoder(decoded_features)
 
-        return decoded
+        return bottleneck
 
 
 
