@@ -11,24 +11,14 @@ set_seed()
 
 
 if __name__ == '__main__':
-    model = StyleGan2Trainer(name='model_without_conditional_input', 
+    model = StyleGan2Trainer(name='model_without_encoder', 
                              models_dir='./my_data/StyleGAN2/', 
                              uv_textures_pregenerated=True,
                              conditional_input=False,
                              image_size=256,
-                             texture_size=128
+                             texture_size=128,
+                             dataset_path='/app/3Dataset'
                              )
 
-    # model.prepare_for_training()
-    # model.train_model()
-    model.load()
-    model.init_dataset()
-    for _ in range(20):
-        data = model.visualize_data(888)
-        wandb.log(data)
-
-    # fid = model.compute_fid_score()
-
-    # print(fid)
-    #model11 high res without con
-    #model 12 high res with con
+    model.prepare_for_training()
+    model.train_model()
