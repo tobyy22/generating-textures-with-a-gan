@@ -205,8 +205,6 @@ class TextureOptimizationGridSearch:
                     torch.nn.utils.clip_grad_norm_(origin_texture, 0.5)
                     my_optimizer.step()
                     
-                    i+=1
-
                 self.rgb_losses_values[row_index, column_index] = losses_values_multiplied["loss_rgb"]
                 self.penalization_losses_values[row_index, column_index] = losses_values_multiplied["loss_penalization"]
                 
