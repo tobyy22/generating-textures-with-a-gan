@@ -16,7 +16,16 @@ set_seed()
 
 
 def checkerboard_texture(device):
-    texture = np.indices((1024,1024)).sum(axis=0) % 2
+    """
+    Generates a 128x128 checkerboard texture as a PyTorch tensor.
+    
+    Args:
+        device (torch.device): The device to allocate the tensor to.
+    
+    Returns:
+        torch.Tensor: A 3-channel checkerboard texture tensor.
+    """
+    texture = np.indices((128,128)).sum(axis=0) % 2
     texture = np.repeat(texture[:, :, np.newaxis], 3, axis=2)
     texture = np.expand_dims(texture, axis=0)
     texture = texture.astype(np.float32)
@@ -24,6 +33,9 @@ def checkerboard_texture(device):
 
 
 class TextureOptimizationGridSearch:
+    """
+    A class to perform grid search optimization for texture generation.
+    """
     def __init__(
         self,
         dataset_path='./my_data/texture_prediction/dataset_just_cow',
@@ -32,7 +44,16 @@ class TextureOptimizationGridSearch:
         penalization_loss=True,
         param_grid=None,
     ):
-        # Assign instance variables from parameters
+        """
+        Initializes the TextureOptimizationGridSearch class with given parameters.
+        
+        Args:
+            dataset_path (str): Path to the dataset.
+            num_views_per_iteration_to_optimize (int): Number of views per iteration.
+            time_to_optimize (int): Time allocated for optimization.
+            penalization_loss (bool): Whether to apply penalization loss.
+            param_grid (dict, optional): Hyperparameter grid for optimization.
+        """
         self.dataset_path = dataset_path
         self.num_views_per_iteration_to_optimize = num_views_per_iteration_to_optimize
         self.time_to_optimize = time_to_optimize
@@ -87,6 +108,9 @@ class TextureOptimizationGridSearch:
 
 
     def grid_search(self):
+        """
+        Performs grid search over the parameter space to optimize texture generation.
+        """
 
         row_index = 0
         for params in self.permutations_dicts:
@@ -99,8 +123,7 @@ class TextureOptimizationGridSearch:
             column_index = 0            
             
             for data in self.dataset:
-
-
+                # data are views rendered with real texture
                 data = torch.permute(data, (0, 2, 3, 1))
                 wandb.init(project="generating-textures-with-a-gan", 
                            config = {}
@@ -115,10 +138,7 @@ class TextureOptimizationGridSearch:
                 # Sum the weighted losses
                 losses_values_multiplied = {k: torch.tensor(0.0, device=self.device) for k in self.loss_weights}
 
-
-
                 start_time = time.time()
-                i = 0
                 while time.time() <= start_time + self.time_to_optimize:
 
                     # Main optimization loop
@@ -128,7 +148,7 @@ class TextureOptimizationGridSearch:
                     rendered_with_new_texture = self.dataset.get_fake_data_for_texture_optimization(origin_texture)
                     rendered_with_new_texture = torch.permute(rendered_with_new_texture, (0, 2, 3, 1))
 
-
+                    # Compute RGB loss
                     loss_rgb = torch.mean(((data - rendered_with_new_texture) ** 2), dim=(1, 2, 3))
                     loss_rgb = torch.sum(loss_rgb)
                     loss_values["loss_rgb"] = loss_rgb / self.num_views_per_iteration_to_optimize
@@ -146,11 +166,9 @@ class TextureOptimizationGridSearch:
                         penalization = penalization_below_0 + penalization_above_1
                         loss_values["loss_penalization"] = penalization / self.num_views_per_iteration_to_optimize
 
-
+                    #For plotting
                     min_texture_value = torch.min(origin_texture)
                     max_texture_value = torch.max(origin_texture)
-
-
 
                     sum_loss = torch.tensor(0.0, device=self.device)
                     for k, l in self.loss_weights.items():
