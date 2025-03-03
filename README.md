@@ -14,7 +14,7 @@ git clone --branch main --depth 1 \
 
 ## Dataset and Test Data
 The dataset and test data are available on the MFF UK server. They will be accessible in the environment once mounted into the Docker container (see below).
-Eventually the data can be downloaded through https://drive.google.com/file/d/1CIpys_H4ZhknnZp_9W6r5tpHDhRLCkVV/view?usp=share_link (without dataset). Unzip and paste into directory with the repository. 
+Eventually the data can be downloaded through https://drive.google.com/file/d/1XpP8Etgx2UbsPLAQyTQSURYcy7pN_biK/view?usp=share_link (without dataset). Unzip and paste into directory with the repository. 
 
 ## Environment Setup
 The entire project runs in a Docker environment. First, you need to build a new image from the `Dockerfile` in the project repository using the following command (though a pre-built image is available in the next step):
