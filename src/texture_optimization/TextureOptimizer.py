@@ -111,6 +111,7 @@ class TextureOptimizationGridSearch:
                 while time.time() <= start_time + self.time_to_optimize:
                     my_optimizer.zero_grad()
                     rendered_with_new_texture = self.dataset.get_fake_data_for_texture_optimization(origin_texture)
+                    rendered_with_new_texture = torch.permute(rendered_with_new_texture, (0, 2, 3, 1))
                     # Compute RGB loss between renders (fake x real texture)
                     loss_rgb = torch.mean(((data - rendered_with_new_texture) ** 2), dim=(1, 2, 3))
                     loss_rgb = torch.sum(loss_rgb) / self.num_views_per_iteration_to_optimize
